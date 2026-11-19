@@ -1,72 +1,150 @@
 # Lagscope
 
-Findet heraus, **warum ein Spiel unter Linux plötzlich ruckelt** – z. B. wenn Overwatch statt 100–160 FPS
-auf einmal nur noch 20–60 FPS schafft und nur ein Neustart hilft.
+Findet heraus, **warum ein Spiel plötzlich ruckelt** – z. B. wenn Overwatch statt 100–160 FPS auf einmal nur
+noch 20–60 FPS schafft und nur ein Neustart hilft. Läuft unter **Linux und Windows**.
 
 Lagscope läuft unauffällig im Hintergrund und schreibt alle paar Sekunden mit, was der PC gerade macht
-(CPU, GPU, VRAM, RAM, Temperaturen, Takt, Engpässe, Festplatte, Netzwerk, Prozesse, Kernel-Meldungen, Fenster im
-Vordergrund …). Sobald es ruckelt, drückst du ein **Tastenkürzel** – das setzt einen Marker. Später zeigt die
-**Auswertung im Browser**, was die Lag-Momente gemeinsam haben – über mehrere Tage hinweg, automatisch.
+(CPU, GPU, VRAM, RAM, Temperaturen, Takt, Engpässe, Festplatte, Netzwerk, Prozesse, Fenster im Vordergrund,
+Kernel-/Systemmeldungen …). Sobald es ruckelt, drückst du ein **Tastenkürzel** – das setzt einen Marker.
+Die **Auswertung im Browser** zeigt dann, was die Lag-Momente gemeinsam haben – über mehrere Tage hinweg,
+automatisch.
 
 ![Analyse](docs/analyse.png)
 
 ![Verlauf mit Lag-Marker](docs/verlauf.png)
 
-- **Portabel:** eine einzige Datei, irgendwohin kopieren, doppelklicken. Keine Installation, keine Pakete.
-- **Sparsam:** ca. 0,1–0,5 % eines CPU-Kerns und ~30 MB RAM, niedrige CPU- und IO-Priorität. Der eigene
-  Verbrauch wird mitgemessen und in der Oberfläche angezeigt.
-- **Flüssige Auswertung:** der Browser bekommt nie Rohdaten, sondern immer nur ≤1500 vorberechnete Punkte pro
+- **Portabel:** irgendwohin kopieren, doppelklicken. Keine Installation, keine Zusatzpakete.
+- **Sparsam:** ca. 0,1–0,5 % eines CPU-Kerns und ~30 MB RAM, mit niedriger CPU- und IO-Priorität. Der eigene
+  Verbrauch wird mitgemessen und angezeigt.
+- **Flüssige Auswertung:** der Browser bekommt nie Rohdaten, sondern immer nur ≤ 1500 vorberechnete Punkte pro
   Linie für den sichtbaren Zeitraum – auch bei Wochen an Daten.
-- **Nur lokal:** die Weboberfläche ist nur auf diesem PC erreichbar (127.0.0.1), es wird nichts ins Internet
-  geschickt.
-- **Nur Linux** (liest `/proc`, `/sys` und das Kernel-Log). Python 3.9 oder neuer ist auf praktisch jeder
-  Distribution schon vorhanden.
+- **Nur lokal:** die Weboberfläche ist nur auf diesem PC erreichbar (127.0.0.1), es wird nichts verschickt.
+- **Zeichnet immer alles auf.** Man muss keine Programme auswählen – die Ursache ist meist *nicht* das Spiel
+  selbst. Der Spielname dient nur dazu, Spielsitzungen zu erkennen.
 
-## Schnellstart
+## Download
 
-1. Den Ordner [`dist/`](dist) herunterladen (bzw. das ganze Repo als ZIP) und irgendwohin kopieren,
-   z. B. nach `~/Programme/lagscope/`. Neben der Datei entsteht später der Datenordner `lagscope-data/`.
-2. **Doppelklick auf `Lagscope.desktop`** (beim ersten Mal ggf. „Vertrauen“ / „Ausführen erlauben“ bestätigen).
-   Alternativ im Terminal: `python3 lagscope`
-   → Der Logger startet im Hintergrund und die Auswertung öffnet sich im Browser.
+**[→ Neueste Version herunterladen](https://github.com/HerbertHorst/LagLogger/releases/latest)**
+
+| System | Datei | Inhalt |
+|---|---|---|
+| Windows 10/11 | `lagscope-windows.zip` | `lagscope.exe` (kein Python nötig) + `PresentMon.exe` für FPS |
+| Linux | `lagscope-linux.zip` | `lagscope` (eine Datei, braucht Python 3.8+, ist überall vorinstalliert) + `Lagscope.desktop` |
+
+Die Downloads werden bei jeder Änderung automatisch gebaut und auf echtem Windows bzw. Linux getestet.
+
+## So läuft es im Alltag
+
+|  | Windows | Linux |
+|---|---|---|
+| Starten | Doppelklick auf `lagscope.exe` | Doppelklick auf `Lagscope.desktop` (oder `python3 lagscope`) |
+| Sieht man, dass es läuft? | **Symbol im Infobereich der Taskleiste** (rechts unten, ggf. im ^-Menü). Rechtsklick: Auswertung öffnen · Lag markieren · Beenden | Kein Symbol – Status steht oben rechts in der Auswertung; Menüeintrag „Lagscope“ öffnet sie |
+| Autostart | Einrichtung → „Autostart aktivieren“ | Einrichtung → „Autostart aktivieren“ |
+| Lag markieren | **`Strg+Alt+L`** – eingebaut, funktioniert im Vollbild, piept zur Bestätigung | eigenes Tastenkürzel in KDE/GNOME (siehe unten), Bestätigung als Benachrichtigung |
+| „Läuft gut“ / „Lag vorbei“ | `Strg+Alt+G` / `Strg+Alt+K` | eigene Tastenkürzel (optional) |
+| FPS | **automatisch** mit PresentMon (liegt bei) – einmalig Berechtigung erteilen | MangoHud – einmalig eine Startoption in Steam |
+| Temperaturen | optional mit LibreHardwareMonitor | automatisch |
+| Auswertung | Tray-Symbol → „Auswertung öffnen“ oder Doppelklick auf die EXE | Doppelklick oder Menüeintrag „Lagscope“ |
+
+Die Auswertung läuft im normalen Browser. Der Logger läuft weiter, auch wenn der Browser zu ist.
+
+## Einrichtung unter Windows
+
+1. `lagscope-windows.zip` entpacken und den Ordner irgendwohin legen, z. B. `C:\Tools\Lagscope`.
+2. **Doppelklick auf `lagscope.exe`.** Weil das Programm nicht signiert ist, zeigt Windows eventuell
+   „Der Computer wurde durch Windows geschützt“ → *Weitere Informationen* → *Trotzdem ausführen*.
+3. Im Browser öffnet sich die Auswertung, unten rechts erscheint das Lagscope-Symbol. Im Tab **Einrichtung**:
+   - **Autostart aktivieren.**
+   - **„Berechtigung für FPS-Messung einrichten“** klicken (öffnet ein Admin-Fenster, fügt dich der
+     Windows-Gruppe „Leistungsprotokollbenutzer“ hinzu), danach einmal ab- und wieder anmelden. Ab dann misst
+     Lagscope die FPS automatisch, sobald das Spiel läuft.
+   - optional **Temperaturen:** [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases)
+     als Administrator starten und *Options → Remote Web Server → Run* einschalten. Ohne LibreHardwareMonitor
+     fehlen nur Temperaturen und genaue Taktraten – GPU-Last, VRAM, CPU-Last und -Takt liest Lagscope direkt aus
+     Windows (bei NVIDIA zusätzlich Temperatur und Takt über den Treiber).
+4. Spielen. Wenn es ruckelt: **`Strg+Alt+L`**.
+
+## Einrichtung unter Linux
+
+1. `lagscope-linux.zip` entpacken und den Ordner irgendwohin legen, z. B. `~/Programme/lagscope`.
+2. **Doppelklick auf `Lagscope.desktop`** (beim ersten Mal ggf. „Vertrauen“ / „Ausführen erlauben“).
+   Alternativ im Terminal: `python3 lagscope`.
 3. Im Tab **Einrichtung**:
-   - **Autostart aktivieren** – damit nach jedem Neustart automatisch mitgeschrieben wird.
-   - **Menüeinträge anlegen** und dann ein **Tastenkürzel** auf „Lagscope: Lag markieren“ legen
-     (KDE: Systemeinstellungen → Tastatur → Kurzbefehle → Neu → Anwendung;
-     GNOME: Einstellungen → Tastatur → Eigene Tastenkombinationen, Befehl aus der Einrichtung kopieren).
-   - optional **MangoHud** für echte FPS-Werte (siehe unten).
-4. Spielen. Wenn es ruckelt: **Tastenkürzel drücken**. Wenn es wieder gut läuft (oder ab und zu zwischendurch):
-   „Läuft gut“ markieren – das verbessert den Vergleich.
-5. Nach ein paar Tagen / Markern: Tab **Analyse** öffnen.
+   - **Autostart aktivieren.**
+   - **Menüeinträge anlegen** und ein **Tastenkürzel** auf „Lagscope: Lag markieren“ legen.
+     *KDE Plasma* (Bazzite, CachyOS, Kubuntu, SteamOS-Desktop …): Systemeinstellungen → Tastatur → Kurzbefehle →
+     Neu → Anwendung. *GNOME*: Einstellungen → Tastatur → Eigene Tastenkombinationen, Befehl aus der Einrichtung
+     kopieren.
+   - optional **MangoHud für FPS:** einmalig in Steam → Rechtsklick auf das Spiel → Eigenschaften →
+     Startoptionen die Zeile eintragen, die Lagscope in der Einrichtung zum Kopieren anzeigt:
+     ```
+     MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=/pfad/zu/lagscope-data/mangohud" %command%
+     ```
+     Danach sammelt Lagscope die FPS-Logs automatisch ein (je nach MangoHud-Version nach Spielende).
+4. Spielen. Wenn es ruckelt: Tastenkürzel drücken.
 
-Die Auswertung kann man jederzeit wieder per Doppelklick öffnen (der Logger läuft weiter, auch wenn der Browser
-zu ist).
+**Prüfen, ob alles ankommt:** `python3 lagscope selftest` (Windows: `lagscope.exe selftest` in der
+Eingabeaufforderung) zeigt in wenigen Sekunden, welche Messwerte auf diesem PC verfügbar sind und warum
+andere fehlen.
+
+## Unterstützte Systeme
+
+### Linux
+
+Getestet mit dem vollständigen Rauchtest (Analyse, Logger, Weboberfläche, Marker, Selbsttest, MangoHud-Import)
+in den offiziellen Container-Images der Distributionen – mit deren eigener Python-Version, als normaler Benutzer:
+
+| Distribution | Python | Ergebnis |
+|---|---|---|
+| **Bazzite 45** (Fedora Kinoite, KDE) | 3.15 | ✅ inkl. Doppelklick-Starter, Autostart, Menüeinträgen, `xprop`/`xdotool` vorinstalliert |
+| Fedora 42 / 43 / Rawhide | 3.13 / 3.14 / 3.15 | ✅ |
+| Nobara, Ultramarine, andere Fedora-Abkömmlinge | wie Fedora | ✅ (gleiche Basis, nicht einzeln getestet) |
+| Ubuntu 20.04 / 22.04 / 24.04 / 26.04 | 3.8 / 3.10 / 3.12 / 3.14 | ✅ |
+| Linux Mint 22, Pop!_OS, Zorin, Kubuntu … | wie Ubuntu | ✅ (Mint getestet) |
+| Debian 12 / 13 | 3.11 / 3.13 | ✅ |
+| Arch Linux, CachyOS, Manjaro, EndeavourOS | 3.14 | ✅ (EndeavourOS = Arch, nicht einzeln getestet) |
+| openSUSE Tumbleweed | 3.13 | ✅ |
+| SteamOS 3 (Steam Deck, Desktop-Modus) | 3.x | ⚪ nicht getestet (kein Image), Arch-Basis – sollte laufen |
+| **openSUSE Leap 15.x** | 3.6 | ❌ Python zu alt – `sudo zypper install python311` und mit `python3.11 lagscope` starten |
+| Distributionen vor 2020 (Ubuntu 18.04, Debian 10 …) | < 3.8 | ❌ Python zu alt |
+
+Voraussetzung ist nur **Python 3.8 oder neuer** (mit dem eingebauten `sqlite3`). Ist es zu alt, meldet Lagscope
+das beim Start.
+
+Was zusätzlich hilft (alles optional, auf Bazzite schon vorhanden): `xprop` oder `xdotool` (Fenster im
+Vordergrund), `notify-send` (Bestätigung beim Markieren), `mangohud` (FPS), `nvidia-smi` (bei NVIDIA, kommt mit
+dem Treiber).
+
+Hinweise:
+- **Wayland** (Standard bei KDE und GNOME): Spiele über Steam/Proton laufen über Xwayland – die werden als
+  Vordergrundfenster erkannt. Reine Wayland-Fenster (z. B. der Browser) erscheinen nicht als Vordergrund; die
+  Messwerte selbst sind davon nicht betroffen.
+- **Steam-Spielmodus** (Gaming Mode auf Bazzite-Deck-Images/Steam Deck): dort gibt es keine Desktop-Tastenkürzel.
+  Der Logger läuft trotzdem; Lags dann nachträglich im Verlauf markieren (in das Diagramm klicken → „Hier war Lag“)
+  oder MangoHud die FPS-Einbrüche automatisch finden lassen.
+- Ohne Leserechte auf das Kernel-Log (`journalctl -k`) fehlen nur die Kernel-Meldungen.
+
+### Windows
+
+| System | Ergebnis |
+|---|---|
+| Windows 10 / 11 (64 Bit) | ✅ – die EXE wird bei jeder Änderung auf Windows Server 2022/2025 (GitHub Actions) gebaut und getestet |
+| Windows 7 / 8, 32 Bit | ❌ |
+
+GPU-Werte kommen über die Windows-Leistungsindikatoren und funktionieren mit NVIDIA, AMD und Intel. Nicht in
+einer automatischen Umgebung testbar sind: echte Grafikkarte, Tray-Menü per Maus, Tastenkürzel im Spiel und
+PresentMon mit laufendem Spiel – das ist der Teil, den man einmal von Hand ausprobieren sollte.
 
 ## Was die Marker bedeuten
 
 | Marker | Bedeutung |
 |---|---|
-| **Lag** | „Jetzt laggt es.“ Ausgewertet werden die 90 s davor bis 60 s danach (der Lag hat meist schon kurz vorher angefangen). Beim Drücken werden zusätzlich das Fenster im Vordergrund und die komplette Prozessliste gespeichert. |
+| **Lag** | „Jetzt laggt es.“ Ausgewertet werden die 90 s davor bis 60 s danach (der Lag hat meist schon kurz vorher angefangen). Gespeichert werden zusätzlich das Fenster im Vordergrund und die komplette Prozessliste. |
 | **Läuft gut** | „Jetzt ist alles normal.“ Dient als Vergleich. |
 | **Lag vorbei** | Beendet das Lag-Zeitfenster vorzeitig (z. B. nach Neustart des Spiels). |
 
 Marker kann man auch nachträglich im Verlauf setzen (in ein Diagramm klicken → „Hier war Lag“), mit Notizen
 versehen oder löschen.
-
-## FPS mit MangoHud (empfohlen)
-
-Lagscope kann die FPS nicht selbst messen. [MangoHud](https://github.com/flightlessmango/MangoHud) kann sie
-aber in eine Datei schreiben, die Lagscope automatisch einliest. Dann werden FPS-Einbrüche **auch ohne
-Tastendruck** erkannt und es wird berechnet, welche Messwerte am stärksten mit den FPS zusammenhängen.
-
-1. MangoHud über die Paketverwaltung installieren (Paket `mangohud`).
-2. In Steam: Rechtsklick auf das Spiel → Eigenschaften → Startoptionen. Den fertigen Befehl (mit dem richtigen
-   Ordner) zeigt Lagscope im Tab **Einrichtung** zum Kopieren an. Er sieht so aus:
-   ```
-   MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=/pfad/zu/lagscope-data/mangohud" %command%
-   ```
-
-Je nach MangoHud-Version wird die Datei erst geschrieben, wenn das Spiel beendet wird.
 
 ## Wie die Analyse funktioniert
 
@@ -74,62 +152,67 @@ Für jeden Vorfall (Marker oder automatisch erkannter FPS-Einbruch) wird das Zei
 **normalem Spielen** verglichen – bevorzugt mit derselben Spielsitzung vor dem Lag, sonst mit „Läuft gut“-Markern
 oder Sitzungen ganz ohne Lag. Gemeldet wird nur, was bei **den meisten** Vorfällen auffällt:
 
-- **Messwerte**, die bei Lags deutlich höher/niedriger sind (robuster Vergleich mit Median, damit einzelne
-  Ausreißer nichts verfälschen) – jeweils mit Erklärung, was das bedeutet und was man tun kann.
+- **Messwerte**, die bei Lags deutlich höher/niedriger sind (robuster Vergleich mit Median) – jeweils mit
+  Erklärung, was das bedeutet und was man tun kann.
 - **Warnsignale** wie fast volles VRAM, Temperaturen im Drosselbereich, Swap, ein Kern auf 100 %.
 - **Prozesse**, die bei Lags mehr CPU brauchen oder neu auftauchen – und Prozesse, die in Sitzungen mit Lag
   laufen, in Sitzungen ohne Lag aber kaum.
-- **Kernel-Meldungen** rund um die Lags (z. B. Split-Lock-Warnungen, GPU-Resets).
+- **Kernel-/Systemmeldungen** rund um die Lags (Linux: z. B. Split-Lock, GPU-Resets; Windows: Grafiktreiber-
+  Neustarts, WHEA-Hardwarefehler, Speicherknappheit).
 - **Zeitlicher Zusammenhang:** wie viele Minuten nach Spielstart, wie lange der PC schon lief.
-- **FPS-Zusammenhang** (mit MangoHud): welche Werte mit sinkenden FPS einhergehen.
+- **FPS-Zusammenhang:** welche Werte mit sinkenden FPS einhergehen (mit PresentMon bzw. MangoHud).
 
 Typische Ursachen, die Lagscope so aufdecken kann:
 
 | Ursache | Woran man es erkennt |
 |---|---|
-| VRAM läuft voll (nach einigen Runden) | VRAM ≥ 92 %, GTT steigt, GPU-Last und -Takt sinken |
-| Steam kompiliert Shader im Hintergrund | Prozess `fossilize_replay`, ein Kern auf 100 %, Disk-Lesen |
-| CPU/GPU drosselt (Temperatur/Energieprofil) | Takt sinkt, Temperatur hoch, Throttle-Zähler, Wechsel des Energieprofils |
-| Arbeitsspeicher knapp / Speicher-Fragmentierung | Speicher-Druck (PSI), Swap, Compaction-Stalls, wird mit Uptime schlimmer |
-| Hintergrundprogramme | Indexer (baloo, tracker), Updates, Browser, Discord, OBS … |
-| Kernel bremst das Spiel | Split-Lock-Meldungen im Kernel-Log |
+| VRAM läuft voll (nach einigen Runden) | VRAM ≥ 92 %, ausgelagerter GPU-Speicher steigt, GPU-Last und -Takt sinken |
+| Shader-Kompilierung im Hintergrund | Linux: `fossilize_replay`; ein Kern auf 100 %, Disk-Lesen |
+| CPU/GPU drosselt (Temperatur/Energieprofil) | Takt sinkt, Temperatur hoch, Leistungsbegrenzung, Wechsel des Energieplans |
+| Arbeitsspeicher knapp / Speicherleck | Speicher-Druck, Swap/Auslagerung, zugesicherter Speicher, wird mit Laufzeit schlimmer |
+| Hintergrundprogramme | Virenscanner, Indexer, Updates, Browser, Discord, Overlays, OBS … |
+| Treiber-/Kernelprobleme | Kernel-/Systemmeldungen zum Zeitpunkt der Lags |
 
 ## Was alles gemessen wird
 
-CPU (gesamt, stärkster Kern, IO-Wait, laufbereite/blockierte Threads), CPU-Takt und -Temperatur,
-Throttle-Ereignisse, Governor/Energieprofil, GPU (AMD und Intel über sysfs, NVIDIA über `nvidia-smi`): Last,
-Takt, VRAM, GTT, Temperatur, Hotspot, Leistung, Drossel-Gründe, Power-Profil; RAM, Swap, Dirty-Pages, Huge Pages;
-Pressure Stall Information (CPU/Speicher/IO); Page Faults, Swap-Aktivität, Compaction, Direct Reclaim;
-Datenträger und Netzwerk; Spielprozess (CPU, RAM, Threads), wineserver, Shader-Kompilierung; Prozessliste
-(alle 6 s die Top-Prozesse); Fenster im Vordergrund; Prozess-Starts/-Enden; Kernel-Log; Systemstarts.
+**Beide Systeme:** CPU (gesamt, stärkster Kern), CPU-Takt, RAM, Auslagerung, Datenträger, Netzwerk, GPU-Last,
+VRAM, Spielprozess (CPU, RAM, Threads), Prozessliste (alle 6 s die Top-Prozesse, einmal pro Minute alle Namen),
+Fenster im Vordergrund, Prozess-Starts/-Enden, Systemstarts, eigener Verbrauch.
 
-Hilfsprogramme, die Lagscope nutzt, wenn sie vorhanden sind (alles optional): `xprop`/`xdotool`/`kdotool`
-(Fenster im Vordergrund), `notify-send` (Bestätigung beim Markieren), `nvidia-smi`, `journalctl`, `mangohud`.
+**Linux zusätzlich:** CPU-/GPU-Temperaturen, IO-Wait, Throttle-Ereignisse, Governor/Energieprofil, GPU-Takt,
+-Leistung, Power-Profil (AMD über sysfs, NVIDIA über `nvidia-smi`), Pressure Stall Information, Page Faults,
+Compaction, Direct Reclaim, Huge Pages, wineserver, Shader-Kompilierung, Kernel-Log.
+
+**Windows zusätzlich:** Leistungsbegrenzung der CPU, zugesicherter Speicher, Energiesparplan, ausgelagerter
+GPU-Speicher, Systemereignisprotokoll; mit PresentMon FPS und Frametimes; mit LibreHardwareMonitor bzw.
+NVIDIA-Treiber Temperaturen, GPU-Takt und -Leistung.
 
 ## Speicherplatz
 
-Etwa 5–15 MB pro Tag im Datenordner `lagscope-data/`. Ältere Daten als 14 Tage werden automatisch gelöscht
-(Marker bleiben länger erhalten).
+Etwa 5–15 MB pro Tag im Ordner `lagscope-data/` neben dem Programm. Daten älter als 14 Tage werden automatisch
+gelöscht (Marker bleiben länger erhalten).
 
 ## Befehle
 
-Ohne Argument (Doppelklick) entspricht `open`.
+Ohne Argument (Doppelklick) entspricht `open`. Unter Windows `lagscope.exe …` statt `python3 lagscope …`.
 
 ```
-python3 lagscope            # Logger starten (falls nötig) + Browser öffnen
-python3 lagscope start      # nur Logger im Hintergrund starten
-python3 lagscope stop       # Logger beenden
-python3 lagscope status     # Status anzeigen
-python3 lagscope mark       # Lag markieren        (für das Tastenkürzel)
+python3 lagscope              # Logger starten (falls nötig) + Browser öffnen
+python3 lagscope start        # nur Logger im Hintergrund starten
+python3 lagscope stop         # Logger beenden
+python3 lagscope status       # Status anzeigen
+python3 lagscope selftest     # prüfen, welche Messwerte auf diesem PC ankommen
+python3 lagscope mark         # Lag markieren        (für das Tastenkürzel)
 python3 lagscope mark --good  # "läuft gut" markieren
 python3 lagscope mark --end   # "Lag vorbei" markieren
-python3 lagscope analyze    # Analyse im Terminal
+python3 lagscope analyze      # Analyse im Terminal
 python3 lagscope import datei.csv   # MangoHud-Log manuell importieren
 ```
 
 ## Einstellungen
 
-`lagscope-data/config.json` (wird beim ersten Start angelegt; nach Änderungen Logger neu starten):
+`lagscope-data/config.json` (wird beim ersten Start angelegt; nach Änderungen Logger neu starten).
+Der Spielname lässt sich auch direkt in der Oberfläche (Einrichtung → Logger) ändern.
 
 | Schlüssel | Standard | Bedeutung |
 |---|---|---|
@@ -137,23 +220,30 @@ python3 lagscope import datei.csv   # MangoHud-Log manuell importieren
 | `game_patterns` | `["overwatch"]` | woran das Spiel erkannt wird (Teil des Prozessnamens) |
 | `retention_days` | 14 | wie lange Messdaten aufgehoben werden |
 | `web_port` | 8765 | Port der Weboberfläche (ist er belegt, wird der nächste freie genommen) |
-| `mangohud_dir` | `""` | Ordner der MangoHud-Logs (leer = `lagscope-data/mangohud`) |
 | `lag_before` / `lag_after` | 90 / 60 | Sekunden vor/nach einem Lag-Marker, die ausgewertet werden |
 | `auto_fps_ratio` | 0.6 | FPS-Einbruch = FPS unter 60 % des Sitzungs-Medians … |
 | `auto_min_seconds` | 10 | … für mindestens so viele Sekunden |
+| `mangohud_dir` | `""` | Linux: Ordner der MangoHud-Logs (leer = `lagscope-data/mangohud`) |
+| `hotkeys` | `ctrl+alt+l` / `g` / `k` | Windows: Tastenkürzel für Lag / läuft gut / Lag vorbei (z. B. `"ctrl+alt+f9"`) |
+| `presentmon_path` | `""` | Windows: Pfad zu PresentMon (leer = neben `lagscope.exe`) |
+| `lhm_url` | `http://127.0.0.1:8085/data.json` | Windows: LibreHardwareMonitor-Webserver |
+| `tray` | `true` | Windows: Symbol im Infobereich anzeigen |
 
 ## Entfernen
 
-Im Tab Einrichtung Autostart und Menüeinträge entfernen (oder die Dateien `~/.config/autostart/lagscope.desktop`
-und `~/.local/share/applications/lagscope-*.desktop` löschen), Logger beenden, Ordner löschen.
+In der Einrichtung Autostart (und unter Linux die Menüeinträge) entfernen, Logger beenden (Tray-Menü oder
+Einrichtung), Ordner löschen.
 
 ## Entwicklung
 
 ```
-python3 lagscope.py              # direkt aus dem Quellordner starten
-python3 build.py                 # baut die portable Einzeldatei dist/lagscope
+python3 lagscope.py                  # direkt aus dem Quellordner starten
+python3 build.py                     # baut die portable Linux-Datei dist/lagscope
+python3 tools/smoke_test.py          # kompletter Rauchtest (Linux und Windows)
 LAGSCOPE_DATA=/tmp/demo python3 tools/demo_data.py   # Demo-Daten erzeugen …
 LAGSCOPE_DATA=/tmp/demo python3 lagscope.py serve    # … und ansehen
 ```
 
-Reines Python (nur Standardbibliothek). Diagramme mit [uPlot](https://github.com/leeoniya/uPlot) (MIT, liegt bei).
+Reines Python (nur Standardbibliothek; unter Windows über `ctypes`). Die Windows-EXE baut GitHub Actions mit
+PyInstaller (`.github/workflows/build.yml`). Diagramme mit [uPlot](https://github.com/leeoniya/uPlot) (MIT, liegt
+bei), FPS unter Windows mit [PresentMon](https://github.com/GameTechDev/PresentMon) (MIT).

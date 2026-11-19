@@ -24,6 +24,7 @@ button:hover { border-color: var(--accent); }
 button.on, button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 button.danger { color: var(--lag); }
 select { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; max-width: 100%; }
+a { color: var(--accent); }
 code, .mono { font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; font-size: 12.5px; }
 .small { font-size: 12.5px; } .muted { color: var(--muted); }
 .top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
