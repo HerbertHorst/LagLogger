@@ -5,4 +5,4 @@ Comment=Lag-Logger starten und Auswertung im Browser öffnen
 Exec=sh -c "exec python3 \\"\\$(dirname \\"\\$1\\")/lagscope\\" open" sh %k
 Icon=utilities-system-monitor
 Terminal=false
-Categories=Utility;System;
+Categories=Utility;

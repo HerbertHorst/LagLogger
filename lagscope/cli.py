@@ -2,13 +2,11 @@
 import argparse
 import json
 import os
-import shutil
-import subprocess
 import sys
 import time
 import urllib.request
 
-from . import __version__, config
+from . import __version__, config, osutil
 
 
 def _alive(url):
@@ -38,19 +36,13 @@ def ensure_running(wait=True):
 
 
 def open_browser(url):
-    for cmd in (["xdg-open", url], ["gio", "open", url], ["kde-open", url]):
-        if shutil.which(cmd[0]):
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-            return True
-    import webbrowser
-    return webbrowser.open(url)
+    return osutil.open_url(url)
 
 
 def cmd_open(args):
     url = ensure_running()
     if not url:
-        from .marker import notify
-        notify("lagscope konnte nicht starten", f"Siehe {config.LOG_FILE}")
+        osutil.error_box("Lagscope konnte nicht starten", f"Details stehen in:\n{config.LOG_FILE}")
         print(f"Logger/Weboberfläche nicht erreichbar – siehe {config.LOG_FILE}")
         return 1
     print(f"Weboberfläche: {url}")
@@ -125,6 +117,11 @@ def cmd_analyze(args):
     return 0
 
 
+def cmd_selftest(args):
+    from . import selftest
+    return selftest.run(as_json=args.json, seconds=args.seconds)
+
+
 def cmd_import(args):
     from . import db, mangohud
     con = db.connect()
@@ -134,6 +131,12 @@ def cmd_import(args):
 
 
 def main(argv=None):
+    osutil.attach_console()
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except Exception:
+            pass
     ap = argparse.ArgumentParser(prog="lagscope", description="Findet heraus, warum Spiele plötzlich ruckeln.")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd")
@@ -153,9 +156,13 @@ def main(argv=None):
     p = sub.add_parser("analyze", help="Analyse im Terminal ausgeben")
     p.add_argument("--json", action="store_true")
     p.add_argument("--no-auto", action="store_true", help="FPS-Einbrüche aus MangoHud nicht automatisch einbeziehen")
+    p = sub.add_parser("selftest", help="Prüfen, welche Messwerte auf diesem PC ankommen")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--seconds", type=float, default=4.0)
     p = sub.add_parser("import", help="MangoHud-CSV-Dateien importieren")
     p.add_argument("files", nargs="+")
     args = ap.parse_args(argv)
     fn = {"open": cmd_open, "start": cmd_start, "stop": cmd_stop, "status": cmd_status, "mark": cmd_mark,
-          "run": cmd_run, "serve": cmd_serve, "analyze": cmd_analyze, "import": cmd_import}.get(args.cmd or "open")
+          "run": cmd_run, "serve": cmd_serve, "analyze": cmd_analyze, "import": cmd_import,
+          "selftest": cmd_selftest}.get(args.cmd or "open")
     return fn(args)

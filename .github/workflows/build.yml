@@ -1,0 +1,96 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux · Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.11", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          allow-prereleases: true
+      - name: Rauchtest (Quellcode)
+        run: python tools/smoke_test.py
+      - name: Portable Datei bauen und testen
+        run: |
+          python build.py
+          python tools/smoke_test.py --exe dist/lagscope
+
+  windows:
+    name: Windows · EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Selbsttest (Quellcode, echte Windows-APIs)
+        run: python lagscope.py selftest
+      - name: Rauchtest (Quellcode)
+        run: python tools/smoke_test.py
+      - name: EXE bauen
+        run: |
+          python -m pip install pyinstaller==6.11.1
+          pyinstaller --onefile --noconsole --name lagscope --icon lagscope/web/icon.ico `
+            --add-data "lagscope/web;lagscope/web" `
+            --hidden-import lagscope.collector_win --hidden-import lagscope.tray_win `
+            lagscope.py
+      - name: Rauchtest (EXE)
+        run: python tools/smoke_test.py --exe dist/lagscope.exe
+      - name: PresentMon (FPS-Messung, MIT-Lizenz) dazulegen und ZIP packen
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force out/lagscope | Out-Null
+          Copy-Item dist/lagscope.exe out/lagscope/
+          Copy-Item packaging/windows/LIESMICH.txt out/lagscope/
+          gh release download -R GameTechDev/PresentMon --pattern "PresentMon-*-x64.exe" --dir pm
+          $pm = Get-ChildItem pm/*.exe | Select-Object -First 1
+          Copy-Item $pm.FullName out/lagscope/PresentMon.exe
+          try { Invoke-WebRequest https://raw.githubusercontent.com/GameTechDev/PresentMon/main/LICENSE.txt -OutFile out/lagscope/PresentMon-LICENSE.txt } catch { "PresentMon: MIT License, https://github.com/GameTechDev/PresentMon" | Out-File out/lagscope/PresentMon-LICENSE.txt }
+          Compress-Archive -Path out/lagscope -DestinationPath lagscope-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lagscope-windows
+          path: lagscope-windows.zip
+
+  release:
+    name: Download bereitstellen
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: lagscope-windows
+      - name: Linux-ZIP packen
+        run: |
+          python3 build.py
+          mkdir -p out/lagscope && cp dist/lagscope dist/Lagscope.desktop dist/LIESMICH.txt out/lagscope/
+          (cd out && zip -r ../lagscope-linux.zip lagscope)
+      - name: Release "latest" erneuern
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(python3 -c "import lagscope; print(lagscope.__version__)")
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest lagscope-windows.zip lagscope-linux.zip \
+            --target "$GITHUB_SHA" --latest \
+            --title "Lagscope $VERSION" \
+            --notes "Automatisch gebaut aus $GITHUB_SHA. Windows: lagscope-windows.zip (mit PresentMon). Linux: lagscope-linux.zip. Anleitung: siehe README."

@@ -1,59 +1,40 @@
 """The background logger."""
-import fcntl
 import os
-import shutil
-import subprocess
-import sys
+import queue
+import threading
 import time
 
-from . import collector, config, db, mangohud
+from . import collector, config, db, mangohud, osutil
 
 # Names that never count as interesting process start/stop events
 QUIET_NAMES = {"xprop", "xdotool", "kdotool", "nvidia-smi", "journalctl", "dmesg", "sh", "bash", "zsh", "fish",
-               "sleep", "cat", "grep", "sed", "awk", "ps", "notify-send", "xdg-open", "python3"}
+               "sleep", "cat", "grep", "sed", "awk", "ps", "notify-send", "xdg-open", "python3",
+               "nvidia-smi.exe", "wevtutil.exe", "conhost.exe", "WmiPrvSE.exe", "backgroundTaskHost.exe",
+               "RuntimeBroker.exe", "dllhost.exe", "SearchProtocolHost.exe", "SearchFilterHost.exe", "smartscreen.exe"}
+
+CURRENT = None             # laufender Daemon (für Statusinfos in der Weboberfläche)
+STOP = threading.Event()   # gesetzt von "Logger beenden" in der Weboberfläche oder von `lagscope stop`
+_LOCK = osutil.InstanceLock(config.LOCK_FILE)
 
 
 def log(msg):
     print(time.strftime("%Y-%m-%d %H:%M:%S"), msg, flush=True)
 
 
-def acquire_lock():
-    """Single instance lock. Returns the open file (keep it!) or None if another logger runs."""
-    os.makedirs(config.DATA_DIR, exist_ok=True)
-    f = open(config.LOCK_FILE, "a+")
-    try:
-        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        f.close()
-        return None
-    f.seek(0)
-    f.truncate()
-    f.write(str(os.getpid()))
-    f.flush()
-    return f
-
-
 def is_running():
-    try:
-        with open(config.LOCK_FILE, "a+") as f:
-            try:
-                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                fcntl.flock(f, fcntl.LOCK_UN)
-                return False
-            except OSError:
-                return True
-    except OSError:
-        return False
+    return osutil.is_locked(config.LOCK_FILE)
 
 
-def be_nice():
-    """Run with low CPU and IO priority so the logger never competes with the game."""
-    try:
-        os.nice(10)
-    except OSError:
-        pass
-    if shutil.which("ionice"):
-        subprocess.run(["ionice", "-c", "3", "-p", str(os.getpid())], capture_output=True)
+def same_boot(a, b):
+    """Windows liefert keine boot_id, sondern den (gerundeten) Startzeitpunkt – mit Toleranz vergleichen."""
+    if a == b:
+        return True
+    if a and b and a.startswith("t:") and b.startswith("t:"):
+        try:
+            return abs(int(a[2:]) - int(b[2:])) <= 120
+        except ValueError:
+            return False
+    return False
 
 
 class MinuteRollup:
@@ -101,6 +82,9 @@ class Daemon:
         self.n_snap = 0
         self.buf_s, self.buf_p = [], []
         self.buf_minute = None
+        self.last_procs = []
+        self.ui_marks = queue.Queue()   # Marker aus dem Tray-Menü
+        self.tray = None
 
     def flush(self, keep=False):
         """Write the current minute. keep=True: write a partial minute (it is overwritten later)."""
@@ -117,24 +101,43 @@ class Daemon:
             last = con.execute("SELECT MAX(ts) FROM samples WHERE ts >= ?", (start - 60,)).fetchone()[0]
             con.execute("UPDATE sessions SET end=? WHERE id=?", (max(start, (last or start) + 60), sid))
         bid = collector.boot_id()
-        if db.get_meta(con, "boot_id") != bid:
+        if not same_boot(db.get_meta(con, "boot_id"), bid):
             up = collector.uptime_s()
             db.add_event(con, "boot", f"Systemstart (Uptime beim Loggerstart: {up / 60:.0f} min)", time.time() - up)
             db.set_meta(con, "boot_id", bid)
         db.add_event(con, "logger", f"Logger gestartet (PID {os.getpid()})")
-        gpus = []
-        if self.sampler.amd.kind:
-            gpus.append({"amd": "AMD", "intel": "Intel"}[self.sampler.amd.kind])
-        if self.sampler.nv.available():
-            gpus.append("NVIDIA")
-        fg = self.sampler.fg
-        tools = [n for n, v in (("xprop", fg.xprop), ("xdotool", fg.xdotool), ("kdotool", fg.kdotool)) if v]
-        info = ["GPU: " + (", ".join(gpus) or "keine Werte"),
-                "Vordergrund-Erkennung: " + (", ".join(tools) or "kein Tool (xprop/xdotool/kdotool fehlt)"),
-                "Kernel-Log: " + ("an" if self.klog else "aus")]
-        db.set_meta(con, "capabilities", " | ".join(info))
+        self.update_capabilities()
         con.commit()
-        log("Gestartet. " + " | ".join(info))
+        log("Gestartet. " + db.get_meta(con, "capabilities", ""))
+
+    def start_tray(self):
+        """Windows: Symbol im Infobereich der Taskleiste."""
+        if not (osutil.IS_WIN and self.cfg.get("tray", True)):
+            return
+        try:
+            from . import server, tray_win
+            icon = os.path.join(config.DATA_DIR, "icon.ico")
+            with open(icon, "wb") as f:
+                f.write(server.static("icon.ico"))
+            self.tray = tray_win.Tray(icon, on_open=lambda: osutil.open_url(server.current_url()),
+                                      on_mark=self.ui_marks.put, on_quit=STOP.set)
+        except Exception as e:
+            log(f"Tray-Symbol nicht möglich: {e!r}")
+
+    def update_tray(self):
+        if not self.tray:
+            return
+        n = self.con.execute("SELECT COUNT(*) FROM markers").fetchone()[0]
+        tip = "Lagscope – zeichnet auf"
+        if self.session_id is not None:
+            tip += f" · Spiel läuft ({(time.time() - self.session_start) / 60:.0f} min)"
+        self.tray.set_tip(f"{tip} · {n} Marker")
+
+    def update_capabilities(self):
+        info = self.sampler.capabilities()
+        info.append(("Ereignisprotokoll: " if osutil.IS_WIN else "Kernel-Log: ") +
+                    ("aus" if not self.klog else "kein Zugriff" if self.klog.ok is False else "an"))
+        db.set_meta(self.con, "capabilities", " | ".join(info))
 
     # ----------------------------------------------------------- per sample
     def handle_states(self, ts, state):
@@ -217,27 +220,50 @@ class Daemon:
         if self.klog:
             for kts, line in self.klog.drain():
                 db.add_event(self.con, "kernel", line, kts)
+        rows = self.sampler.fps_rows()
+        if rows:
+            self.con.executemany("INSERT OR REPLACE INTO fps(ts, fps, ft_max, ft_avg) VALUES (?,?,?,?)", rows)
+        for hts, kind in self.sampler.hotkey_events():
+            self.hotkey_marker(hts, kind, procs)
+        while not self.ui_marks.empty():
+            self.hotkey_marker(time.time(), self.ui_marks.get_nowait(), procs)
+        self.last_procs = procs
+
+    def hotkey_marker(self, ts, kind, procs):
+        """Windows: Tastenkürzel direkt im Logger – Vordergrund und Prozessliste sind sofort da."""
+        from . import marker
+        fg = self.sampler.fg.get() or {}
+        snap = collector.snapshot_list(procs, top=40)
+        snap["foreground"] = fg
+        marker.insert(self.con, ts, kind, None, fg, snap)
+        self.con.commit()
+        osutil.notify(marker.TITLES.get(kind, "Markiert"), kind=kind)
+        log(f"Marker per Tastenkürzel: {kind} (Vordergrund: {fg.get('name') or '?'})")
 
     def run(self):
         self.startup()
+        self.start_tray()
         interval = float(self.cfg["interval"])
         next_t = time.monotonic()
-        last_commit = last_import = last_cleanup = 0.0
-        while True:
+        last_import = last_cleanup = last_caps = 0.0
+        while not STOP.is_set():
             try:
                 self.tick()
             except Exception as e:  # ein Fehler darf den Logger nicht beenden
                 log(f"Fehler beim Messen: {e!r}")
             now = time.monotonic()
-            if now - last_commit >= 10:
-                self.con.commit()
-                last_commit = now
+            # jede Messung sofort festschreiben, damit Weboberfläche/Marker nie auf eine Sperre warten
+            self.con.commit()
             if now - last_import >= 60:
                 last_import = now
                 try:
                     mangohud.import_dir(self.con, self.cfg.get("mangohud_dir"), log)
                 except Exception as e:
                     log(f"MangoHud-Import: {e!r}")
+            if now - last_caps >= 60:
+                last_caps = now
+                self.update_capabilities()
+                self.update_tray()
             if now - last_cleanup >= 3600:
                 last_cleanup = now
                 try:
@@ -249,25 +275,34 @@ class Daemon:
             if delay < 0:  # z.B. nach Standby
                 next_t = time.monotonic()
                 delay = interval
-            time.sleep(delay)
+            STOP.wait(delay)
 
 
 def run(web=True):
-    lock = acquire_lock()
-    if lock is None:
+    if not _LOCK.acquire():
         print("lagscope läuft bereits.")
         return 1
+    try:
+        with open(config.PID_FILE, "w") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
     cfg = config.load()
-    be_nice()
+    osutil.lower_priority()
     if web:
         from . import server
         server.start_background(cfg)
     import signal
-    signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
+    try:
+        signal.signal(signal.SIGTERM, lambda *a: STOP.set())
+    except (ValueError, OSError):
+        pass
+    global CURRENT
     d = Daemon(cfg)
+    CURRENT = d
     try:
         d.run()
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt:
         pass
     finally:
         try:
@@ -276,38 +311,50 @@ def run(web=True):
                 d.con.execute("UPDATE sessions SET end=? WHERE id=?", (time.time(), d.session_id))
             db.add_event(d.con, "logger", "Logger beendet")
             d.con.commit()
+            d.con.close()
         except Exception:
             pass
+        if hasattr(d.sampler, "pm"):
+            d.sampler.pm.stop()
+        if d.tray:
+            d.tray.close()
         log("Beendet.")
+        _LOCK.release()
     return 0
 
 
 def start_detached():
-    """Start the logger as a detached background process (no terminal needed)."""
-    os.makedirs(config.DATA_DIR, exist_ok=True)
-    logf = open(config.LOG_FILE, "a")
-    # Log-Datei klein halten
+    """Start the logger as a detached background process (no terminal/console window)."""
     try:
-        if os.path.getsize(config.LOG_FILE) > 2_000_000:
-            logf.close()
+        if os.path.getsize(config.LOG_FILE) > 2_000_000:  # Log-Datei klein halten
             os.replace(config.LOG_FILE, config.LOG_FILE + ".old")
-            logf = open(config.LOG_FILE, "a")
     except OSError:
         pass
-    target = [sys.executable, config.APP_ROOT] if config.APP_IS_FILE else \
-        [sys.executable, os.path.join(config.APP_ROOT, "lagscope.py")]
-    subprocess.Popen(target + ["run"], stdout=logf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                     start_new_session=True, close_fds=True)
+    osutil.spawn_detached(config.launch_args("run"), config.LOG_FILE)
 
 
 def stop():
+    """Ask the running logger to stop (via its web API, so it can save), otherwise terminate it."""
+    if not is_running():
+        return False
+    from . import server
     try:
-        with open(config.LOCK_FILE) as f:
+        import urllib.request
+        req = urllib.request.Request(server.current_url() + "api/stop", data=b"{}", method="POST",
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=3).read()
+        for _ in range(40):
+            if not is_running():
+                return True
+            time.sleep(0.25)
+    except Exception:
+        pass
+    try:
+        with open(config.PID_FILE) as f:
             pid = int(f.read().strip() or 0)
     except (OSError, ValueError):
         pid = 0
-    if pid and is_running():
-        os.kill(pid, 15)
+    if pid and osutil.pid_alive(pid):
+        osutil.terminate(pid)
         return True
     return False
-

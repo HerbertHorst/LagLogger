@@ -494,7 +494,7 @@ function renderAnalysis(a) {
 }
 
 // ------------------------------------------------------------------ events
-const EV_LABEL = { kernel: "Kernel", proc_start: "Prozess gestartet", proc_exit: "Prozess beendet", focus: "Vordergrund",
+const EV_LABEL = { kernel: "Kernel/System", proc_start: "Prozess gestartet", proc_exit: "Prozess beendet", focus: "Vordergrund",
   state: "Einstellung", game: "Spiel", boot: "Systemstart", logger: "Logger" };
 
 async function loadEvents() {
@@ -527,10 +527,76 @@ function copyRow(cmd) {
 async function renderSetup() {
   const st = await api("/api/status");
   S.info.status = st;
+  const h = st.platform === "windows" ? setupWindows(st) : setupLinux(st);
+  $("#setupOut").innerHTML = h + loggerCard(st);
+  bindSetup();
+}
+
+function loggerCard(st) {
+  const su = st.setup;
+  return `<div class="card"><h2>Logger</h2><div class="kv small">
+    <div>System</div><div>${esc(st.os_name || "")}</div>
+    <div>Status</div><div>${st.running ? "läuft" : "läuft nicht"}</div>
+    <div>Letzte Messung</div><div>${st.last_sample ? fmtTime(st.last_sample) : "–"}</div>
+    <div>Eigenverbrauch</div><div>${st.self_cpu != null ? st.self_cpu.toFixed(2) + " % CPU (eines Kerns)" : "–"}, ${st.self_rss ?? "–"} MB RAM</div>
+    <div>Messintervall</div><div>${st.interval} s</div>
+    <div>Spiel-Erkennung</div><div><input id="gamePat" value="${esc(st.game_patterns.join(", "))}" style="width:180px"> <button id="gameSave">Speichern</button>
+      <div class="muted">Teil des Prozessnamens, mehrere mit Komma. Nur für Spielsitzungen – aufgezeichnet wird immer alles.</div></div>
+    <div>Daten</div><div class="mono">${esc(st.data_dir)}</div>
+    <div>Datenbank</div><div>${st.db_size_mb} MB · Aufbewahrung ${st.retention_days} Tage</div>
+    <div>Erkannt</div><div>${esc(st.capabilities || "–")}</div>
+    <div>Hilfsprogramme</div><div>${Object.entries(su.tools).map(([k, v]) => `${v ? "✓" : "✗"} ${k}`).join(" · ")}</div>
+  </div>
+  <p class="small muted">Einstellungen (Messintervall, Spielname, Tastenkürzel …) stehen in <code>config.json</code> im Datenordner. Nach Änderungen den Logger neu starten. Prüfen, was auf diesem PC ankommt: <code>lagscope selftest</code>.</p>
+  <div class="toolbar"><button class="danger" id="stopLogger">Logger beenden</button></div></div>`;
+}
+
+function setupWindows(st) {
+  const su = st.setup, w = st.win || {}, hk = st.hotkeys || {};
+  const hks = w.hotkeys || {};
+  const pm = w.presentmon || (st.running ? "?" : "Logger läuft nicht");
+  const hkRow = (k, label) => `<div>${label}</div><div><code>${esc(hk[k] || "–")}</code> ${hks[k] ? `<span class="muted">(${esc(hks[k].split(": ").pop())})</span>` : ""}</div>`;
+  return `<div class="grid2">
+  <div class="card"><h2>1. Autostart</h2>
+    <p>Damit der Logger nach jedem Windows-Start automatisch mitläuft (im Hintergrund, mit niedriger Priorität).</p>
+    <p>Status: <b>${su.autostart ? (su.autostart_here ? "aktiv" : "aktiv, aber für eine andere Kopie von Lagscope") : "aus"}</b></p>
+    <div class="toolbar"><button class="primary" data-setup="autostart_on">${su.autostart ? "Autostart neu setzen (auf diese Kopie)" : "Autostart aktivieren"}</button>
+    ${su.autostart ? '<button data-setup="autostart_off">Autostart entfernen</button>' : ""}</div>
+    <p class="small muted">Wenn du den Lagscope-Ordner verschiebst, hier einmal neu setzen.</p>
+  </div>
+
+  <div class="card"><h2>2. Tastenkürzel (schon aktiv)</h2>
+    <p>Unter Windows sind die Tastenkürzel eingebaut – sie funktionieren auch im Vollbild-Spiel. Zur Bestätigung piept es kurz.</p>
+    <div class="kv">${hkRow("lag", "Lag markieren")}${hkRow("good", "Läuft gut")}${hkRow("end", "Lag vorbei")}</div>
+    <p class="small muted">Ändern: <code>"hotkeys"</code> in <code>config.json</code> (z. B. <code>"ctrl+alt+f9"</code>), dann Logger neu starten.</p>
+  </div>
+
+  <div class="card"><h2>3. FPS mitschreiben (PresentMon)</h2>
+    <p>Mit PresentMon misst Lagscope die FPS automatisch, sobald das Spiel läuft – FPS-Einbrüche werden dann auch ohne Tastendruck erkannt.</p>
+    <div class="kv small"><div>Status</div><div><b>${esc(pm)}</b></div>
+    <div>Programm</div><div class="mono">${esc(w.presentmon_path || "nicht gefunden")}</div></div>
+    ${w.presentmon_path ? "" : '<p class="small">PresentMon fehlt: <code>PresentMon.exe</code> aus dem Lagscope-Download neben <code>lagscope.exe</code> legen.</p>'}
+    <p class="small">PresentMon braucht einmalig die Berechtigung „Leistungsprotokollbenutzer“. Der Knopf öffnet dafür ein Admin-Fenster; danach einmal ab- und wieder anmelden.</p>
+    <div class="toolbar"><button data-setup="fps_rights">Berechtigung für FPS-Messung einrichten (Admin)</button></div>
+    <p class="small muted">Bisher ${st.n_fps_seconds} Sekunden FPS-Daten.</p>
+  </div>
+
+  <div class="card"><h2>4. Temperaturen (optional)</h2>
+    <p>GPU-Last, VRAM, CPU-Last und -Takt liest Lagscope direkt aus Windows. Für <b>Temperaturen</b> und genaue Taktraten zusätzlich
+    <a href="https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases" target="_blank" rel="noopener">LibreHardwareMonitor</a> verwenden:</p>
+    <ol class="small"><li>LibreHardwareMonitor herunterladen, als Administrator starten</li>
+    <li>Menü <i>Options → Remote Web Server → Run</i> aktivieren (Port 8085)</li>
+    <li>optional: <i>Options → Run On Windows Startup</i></li></ol>
+    <p class="small">Status: <b>${w.lhm ? "verbunden ✓" : "nicht erreichbar"}</b>${st.setup.tools["nvidia-smi"] ? " · NVIDIA-Werte kommen auch ohne über nvidia-smi" : ""}</p>
+  </div>
+  </div>`;
+}
+
+function setupLinux(st) {
   const su = st.setup, c = st.commands;
   const mh = st.mangohud_dir;
   const launch = `MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=${mh}" %command%`;
-  let h = `<div class="grid2">
+  return `<div class="grid2">
   <div class="card"><h2>1. Autostart</h2>
     <p>Damit der Logger nach jedem Neustart automatisch mitläuft (im Hintergrund, mit niedriger Priorität).</p>
     <p>Status: <b>${su.autostart ? (su.autostart_here ? "aktiv" : "aktiv, aber für eine andere Kopie von Lagscope") : "aus"}</b></p>
@@ -543,40 +609,27 @@ async function renderSetup() {
     <p>Lege ein globales Tastenkürzel an, das du drückst, sobald es ruckelt. Es speichert den Zeitpunkt, das Fenster im Vordergrund und alle laufenden Prozesse.</p>
     <div class="toolbar"><button class="primary" data-setup="launchers_on">${su.launchers ? "Menüeinträge neu anlegen" : "Menüeinträge anlegen"}</button>
     ${su.launchers ? '<button data-setup="launchers_off">Menüeinträge entfernen</button>' : ""}</div>
-    <p class="small"><b>KDE Plasma:</b> Systemeinstellungen → Tastatur → Kurzbefehle → „Neu“ → „Anwendung“ → <i>Lagscope: Lag markieren</i> wählen → Taste festlegen (z. B. <code>Strg+Alt+L</code>). Optional genauso für <i>Läuft gut</i> und <i>Lag vorbei</i>.</p>
+    <p class="small"><b>KDE Plasma (z. B. Bazzite, CachyOS, Kubuntu):</b> Systemeinstellungen → Tastatur → Kurzbefehle → „Neu“ → „Anwendung“ → <i>Lagscope: Lag markieren</i> wählen → Taste festlegen (z. B. <code>Strg+Alt+L</code>). Optional genauso für <i>Läuft gut</i> und <i>Lag vorbei</i>.</p>
     <p class="small"><b>GNOME:</b> Einstellungen → Tastatur → Tastenkombinationen → Eigene Tastenkombinationen → „+“ → Befehl einfügen:</p>
     <div class="small">Lag:</div>${copyRow(c.mark)}
     <div class="small">Läuft gut:</div>${copyRow(c.good)}
     <div class="small">Lag vorbei:</div>${copyRow(c.end)}
-    <p class="small muted">Nach dem Drücken erscheint kurz eine Benachrichtigung. Testen: einmal drücken und im Verlauf nachsehen.</p>
+    <p class="small muted">Nach dem Drücken erscheint kurz eine Benachrichtigung. Im Steam-Spielmodus (Gaming Mode) gibt es keine Tastenkürzel – dort Lags nachträglich im Verlauf markieren.</p>
   </div>
 
   <div class="card"><h2>3. FPS mitschreiben (MangoHud, empfohlen)</h2>
     <p>Lagscope kann FPS nicht selbst messen. Mit MangoHud werden FPS-Einbrüche zusätzlich <b>automatisch</b> erkannt – auch die, bei denen niemand den Shortcut drückt.</p>
     <p class="small">MangoHud ist ${su.tools.mangohud ? "<b>installiert</b>" : "<b>nicht gefunden</b> – über die Paketverwaltung installieren (Paket „mangohud“)"}.
-    In Steam: Rechtsklick auf Overwatch → Eigenschaften → Startoptionen:</p>
+    In Steam: Rechtsklick auf das Spiel → Eigenschaften → Startoptionen:</p>
     ${copyRow(launch)}
     <p class="small muted">Lagscope liest neue Logs aus <code>${esc(mh)}</code> jede Minute ein. MangoHud schreibt die Datei je nach Version erst, wenn das Spiel beendet wird. Bisher importiert: ${st.mangohud_files} Datei(en), ${st.n_fps_seconds} Sekunden FPS-Daten.</p>
   </div>
+  ${!su.tools.xprop && !su.tools.xdotool && !su.tools.kdotool ? '<div class="card"><p class="alert small">Ohne <code>xprop</code> (Paket meist „xorg-xprop“ bzw. „x11-utils“) kann das Fenster im Vordergrund nicht erkannt werden.</p></div>' : ""}
+  </div>`;
+}
 
-  <div class="card"><h2>Logger</h2><div class="kv small">
-    <div>Status</div><div>${st.running ? "läuft" : "läuft nicht"}</div>
-    <div>Letzte Messung</div><div>${st.last_sample ? fmtTime(st.last_sample) : "–"} <span class="muted">(wird minutenweise gespeichert)</span></div>
-    <div>Eigenverbrauch</div><div>${st.self_cpu != null ? st.self_cpu.toFixed(2) + " % CPU (eines Kerns)" : "–"}, ${st.self_rss ?? "–"} MB RAM</div>
-    <div>Messintervall</div><div>${st.interval} s</div>
-    <div>Spiel-Erkennung</div><div>${esc(st.game_patterns.join(", "))}</div>
-    <div>Daten</div><div class="mono">${esc(st.data_dir)}</div>
-    <div>Datenbank</div><div>${st.db_size_mb} MB · Aufbewahrung ${st.retention_days} Tage</div>
-    <div>Erkannt</div><div>${esc(st.capabilities || "–")}</div>
-    <div>Desktop</div><div>${esc(su.desktop || "?")} / ${esc(su.session || "?")}</div>
-    <div>Hilfsprogramme</div><div>${Object.entries(su.tools).map(([k, v]) => `${v ? "✓" : "✗"} ${k}`).join(" · ")}</div>
-  </div>
-  ${!su.tools.xprop && !su.tools.xdotool && !su.tools.kdotool ? '<p class="alert small">Ohne <code>xprop</code> (Paket meist „xorg-xprop“ bzw. „x11-utils“) kann das Fenster im Vordergrund nicht erkannt werden. Unter KDE-Wayland hilft zusätzlich „kdotool“.</p>' : ""}
-  ${!su.tools["notify-send"] ? '<p class="small muted">Tipp: Mit <code>notify-send</code> (Paket „libnotify“) erscheint beim Markieren eine Bestätigung.</p>' : ""}
-  <p class="small muted">Einstellungen (z. B. Messintervall, Spielname) stehen in <code>config.json</code> im Datenordner. Nach Änderungen den Logger neu starten.</p>
-  <div class="toolbar"><button class="danger" id="stopLogger">Logger beenden</button></div>
-  </div></div>`;
-  $("#setupOut").innerHTML = h;
+function bindSetup() {
+
   $$("[data-setup]").forEach((b) => b.onclick = async () => {
     b.disabled = true;
     const r = await post("/api/setup", { action: b.dataset.setup });
@@ -587,6 +640,12 @@ async function renderSetup() {
     try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Kopiert ✓"; } catch (e) { b.textContent = "Bitte manuell kopieren"; }
     setTimeout(() => { b.textContent = "Kopieren"; }, 1500);
   });
+  $("#gameSave").onclick = async () => {
+    const pats = $("#gamePat").value.split(",").map((x) => x.trim()).filter(Boolean);
+    const r = await post("/api/config", { game_patterns: pats });
+    $("#gameSave").textContent = r.ok ? "Gespeichert ✓" : "Fehler";
+    setTimeout(() => { $("#gameSave").textContent = "Speichern"; }, 1500);
+  };
   $("#stopLogger").onclick = async () => {
     if (!confirm("Logger wirklich beenden? Bis zum nächsten Start (Doppelklick oder Autostart) wird nichts aufgezeichnet.")) return;
     await post("/api/stop", {});
@@ -637,10 +696,12 @@ async function init() {
     else if (info.status.last_sample) setRange(info.status.last_sample - 3600, info.status.last_sample + 60, true);
     else setRange(now - 3600, now, true);
   }
-  if (!info.status.n_markers && !info.status.setup.launchers) {
+  if (!info.status.n_markers && !info.status.setup.autostart) {
+    const win = info.status.platform === "windows";
+    const hk = (info.status.hotkeys || {}).lag || "ctrl+alt+l";
     $("#detail").innerHTML = `<div class="card" style="margin:0"><h2>Willkommen!</h2>
       <p>Lagscope zeichnet jetzt im Hintergrund auf. Als Nächstes im Tab <b>Einrichtung</b>:</p>
-      <ol><li>Autostart aktivieren</li><li>Tastenkürzel zum Markieren anlegen</li><li>optional MangoHud für FPS</li></ol>
+      <ol><li>Autostart aktivieren</li>${win ? `<li>Tastenkürzel ist schon aktiv: <code>${esc(hk)}</code> = Lag markieren</li><li>optional: FPS (PresentMon) und Temperaturen</li>` : "<li>Tastenkürzel zum Markieren anlegen</li><li>optional MangoHud für FPS</li>"}</ol>
       <button class="primary" id="goSetup">Zur Einrichtung</button></div>`;
     $("#goSetup").onclick = () => switchTab("setup");
   }

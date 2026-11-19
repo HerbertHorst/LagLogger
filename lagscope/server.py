@@ -5,10 +5,9 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from importlib import resources
 from urllib.parse import parse_qs, urlparse
 
-from . import analysis, config, db, metrics, setup
+from . import analysis, config, db, metrics, osutil, setup
 
 MAX_POINTS = 1500          # nie mehr Punkte pro Linie an den Browser
 RAW_MAX_STEP = 15          # darüber werden die Minuten-Zusammenfassungen benutzt (statt Rohdaten zu entpacken)
@@ -20,6 +19,8 @@ STATIC = {
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/uPlot.min.js": ("uPlot.iife.min.js", "application/javascript; charset=utf-8"),
     "/uPlot.min.css": ("uPlot.min.css", "text/css; charset=utf-8"),
+    "/icon.png": ("icon.png", "image/png"),
+    "/favicon.ico": ("icon.ico", "image/x-icon"),
 }
 _static_cache = {}
 
@@ -28,8 +29,18 @@ _analysis_lock = threading.Lock()
 
 
 def static(name):
+    """Web files: from the source folder, the zipapp or the Windows EXE (PyInstaller)."""
     if name not in _static_cache:
-        _static_cache[name] = resources.files("lagscope").joinpath("web", name).read_bytes()
+        import pkgutil
+        import sys
+        data = None
+        base = getattr(sys, "_MEIPASS", None)
+        if base and os.path.exists(os.path.join(base, "lagscope", "web", name)):
+            with open(os.path.join(base, "lagscope", "web", name), "rb") as f:
+                data = f.read()
+        if data is None:
+            data = pkgutil.get_data("lagscope", "web/" + name)
+        _static_cache[name] = data
     return _static_cache[name]
 
 
@@ -163,6 +174,9 @@ def status(con, cfg):
             ("mark", ("mark",)), ("good", ("mark", "--good")), ("end", ("mark", "--end")),
             ("start", ("start",)), ("open", ("open",)), ("stop", ("stop",)))},
         setup=setup.status(),
+        platform="windows" if osutil.IS_WIN else "linux", os_name=osutil.os_name(),
+        win=(daemon.CURRENT.sampler.status_info() if daemon.CURRENT is not None else {}),
+        hotkeys=cfg.get("hotkeys") if osutil.IS_WIN else None,
         state=last_d.get("_st") or {},
     )
 
@@ -173,7 +187,7 @@ def run_analysis(cfg, include_auto):
             return
         _analysis["running"] = True
     try:
-        con = db.connect()
+        con = db.connect_read()
         res = analysis.analyze(con, cfg, include_auto=include_auto)
         con.close()
         _analysis.update(result=res, error=None, key=include_auto)
@@ -193,6 +207,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         pass
+
+    def handle(self):
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
 
     def send(self, code, body, ctype="application/json; charset=utf-8", cache=False):
         if not isinstance(body, (bytes, bytearray)):
@@ -216,13 +236,15 @@ class Handler(BaseHTTPRequestHandler):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         if u.path in STATIC:
             name, ctype = STATIC[u.path]
-            return self.send(200, static(name), ctype, cache=name.startswith("uPlot"))
+            return self.send(200, static(name), ctype, cache=name.startswith(("uPlot", "icon")))
         try:
-            con = db.connect()
+            con = db.connect_read()
             try:
                 return self.route_get(u.path, q, con)
             finally:
                 con.close()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return None  # Browser hat die Anfrage abgebrochen (z. B. beim schnellen Zoomen)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -328,11 +350,21 @@ class Handler(BaseHTTPRequestHandler):
                 con.commit()
                 con.close()
                 return self.send(200, {"ok": True})
+            if path == "/api/config":
+                pats = [str(x).strip().lower() for x in body.get("game_patterns", []) if str(x).strip()][:10]
+                if not pats:
+                    return self.send(400, {"error": "mindestens ein Spielname"})
+                self.cfg["game_patterns"][:] = pats   # gilt sofort (der Logger nutzt dieselbe Liste)
+                config.save({"game_patterns": pats})
+                return self.send(200, {"ok": True, "game_patterns": pats})
             if path == "/api/setup":
                 return self.send(200, setup.apply(body.get("action", "")))
             if path == "/api/stop":
                 from . import daemon
-                threading.Timer(0.3, lambda: os.kill(os.getpid(), 15)).start() if daemon.is_running() else None
+                if daemon.CURRENT is not None:
+                    daemon.STOP.set()          # Logger speichert und beendet sich
+                else:                          # nur Weboberfläche (`lagscope serve`)
+                    threading.Timer(0.3, lambda: os._exit(0)).start()
                 return self.send(200, {"ok": True})
         except Exception as e:
             return self.send(500, {"error": repr(e)})

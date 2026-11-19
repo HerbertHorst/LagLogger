@@ -7,7 +7,16 @@ import zipfile
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(ROOT, "dist")
 OUT = os.path.join(DIST, "lagscope")
-MAIN = "import sys\nfrom lagscope.cli import main\nsys.exit(main())\n"
+MAIN = "import sys\n" + r"""if sys.version_info < (3, 8):
+    msg = "Lagscope braucht Python 3.8 oder neuer (gefunden: %d.%d)." % sys.version_info[:2]
+    sys.stderr.write(msg + "\n")
+    try:
+        import subprocess
+        subprocess.call(["notify-send", "Lagscope", msg])
+    except Exception:
+        pass
+    sys.exit(1)
+""" + "from lagscope.cli import main\nsys.exit(main())\n"
 
 os.makedirs(DIST, exist_ok=True)
 tmp = OUT + ".tmp"

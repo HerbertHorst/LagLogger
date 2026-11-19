@@ -1,18 +1,31 @@
 """Paths and user configuration.
 
 lagscope is portable: all data lives in a folder `lagscope-data` right next to the program file.
-If that folder can't be written (e.g. read-only medium), ~/.local/share/lagscope is used instead.
+If that folder can't be written (e.g. read-only medium), ~/.local/share/lagscope (Linux) or
+%LOCALAPPDATA%/lagscope (Windows) is used instead.
 """
 import json
 import os
 import sys
 
 HOME = os.path.expanduser("~")
+IS_WIN = sys.platform == "win32"
+FROZEN = bool(getattr(sys, "frozen", False))
 
-# In a zipapp, __file__ is ".../lagscope(.pyz)/lagscope/config.py" -> APP_ROOT is the zip file itself.
-APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if FROZEN:
+    # Windows-EXE (PyInstaller): das Programm ist die EXE selbst
+    APP_ROOT = os.path.abspath(sys.executable)
+else:
+    # In a zipapp, __file__ is ".../lagscope/lagscope/config.py" -> APP_ROOT is the zip file itself.
+    APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP_IS_FILE = os.path.isfile(APP_ROOT)
 APP_DIR = os.path.dirname(APP_ROOT) if APP_IS_FILE else APP_ROOT
+
+
+def _fallback_data_dir():
+    if IS_WIN:
+        return os.path.join(os.environ.get("LOCALAPPDATA") or HOME, "lagscope")
+    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "lagscope")
 
 
 def _pick_data_dir():
@@ -27,25 +40,37 @@ def _pick_data_dir():
         os.remove(test)
         return portable
     except OSError:
-        return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "lagscope")
+        return _fallback_data_dir()
 
 
 DATA_DIR = _pick_data_dir()
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
 DB_FILE = os.path.join(DATA_DIR, "lagscope.db")
 LOCK_FILE = os.path.join(DATA_DIR, "lagscope.lock")
+PID_FILE = os.path.join(DATA_DIR, "lagscope.pid")
 LOG_FILE = os.path.join(DATA_DIR, "lagscope.log")
 MANGOHUD_DIR = os.path.join(DATA_DIR, "mangohud")
 
 
+def launch_args(*args):
+    """Argument list that runs this exact copy of lagscope."""
+    if FROZEN:
+        return [APP_ROOT] + list(args)
+    exe = sys.executable or "python3"
+    if IS_WIN and exe.lower().endswith("python.exe") and os.path.exists(exe[:-10] + "pythonw.exe"):
+        exe = exe[:-10] + "pythonw.exe"  # ohne Konsolenfenster
+    script = APP_ROOT if APP_IS_FILE else os.path.join(APP_ROOT, "lagscope.py")
+    return [exe, script] + list(args)
+
+
 def launch_command(*args):
-    """Shell command that runs this exact copy of lagscope (used for autostart / shortcut)."""
+    """Command line that runs this exact copy of lagscope (used for autostart / shortcut)."""
+    a = launch_args(*args)
+    if IS_WIN:
+        import subprocess
+        return subprocess.list2cmdline(a)
     import shlex
-    if APP_IS_FILE:
-        base = [sys.executable or "python3", APP_ROOT]
-    else:
-        base = [sys.executable or "python3", os.path.join(APP_ROOT, "lagscope.py")]
-    return " ".join(shlex.quote(a) for a in base + list(args))
+    return " ".join(shlex.quote(x) for x in a)
 
 
 DEFAULTS = {
@@ -70,6 +95,12 @@ DEFAULTS = {
     # Automatische Lag-Erkennung aus MangoHud-FPS: FPS unter diesem Anteil des Sitzungs-Medians
     "auto_fps_ratio": 0.6,
     "auto_min_seconds": 10,
+    # Nur Windows: eingebaute Tastenkürzel (Strg+Alt+…). Möglich: ctrl, alt, shift, win + Buchstabe/Ziffer/F1–F24
+    "hotkeys": {"lag": "ctrl+alt+l", "good": "ctrl+alt+g", "end": "ctrl+alt+k"},
+    # Nur Windows: LibreHardwareMonitor-Webserver (für Temperaturen und Takt)
+    "lhm_url": "http://127.0.0.1:8085/data.json",
+    # Nur Windows: Pfad zu PresentMon (leer = neben lagscope.exe suchen)
+    "presentmon_path": "",
 }
 
 
@@ -89,6 +120,19 @@ def load():
     except OSError:
         pass
     return cfg
+
+
+def save(changes):
+    """Merge changes into config.json (keeps everything else the user wrote there)."""
+    try:
+        with open(CONFIG_FILE) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        data = dict(DEFAULTS)
+    data.update(changes)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def write_default_if_missing():

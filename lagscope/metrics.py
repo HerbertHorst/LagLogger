@@ -5,7 +5,7 @@
 """
 
 GROUPS = [
-    ("fps", "FPS (MangoHud)"),
+    ("fps", "FPS"),
     ("cpu", "CPU-Auslastung"),
     ("cpufreq", "CPU-Takt & Temperatur"),
     ("gpu", "GPU"),
@@ -57,14 +57,17 @@ m("cpu_freq_max", "CPU-Takt max", "MHz", "cpufreq", 150, None,
   "Selbst der schnellste Kern taktet niedriger – deutet auf Temperatur-/Power-Limit oder Energiesparprofil.")
 m("cpu_temp", "CPU-Temperatur", "°C", "cpufreq", 3,
   "Die CPU wird wärmer. Bei >90 °C drosselt sie – Lüfter/Kühler/Wärmeleitpaste prüfen.")
+m("cpu_perf_limit", "Leistungsbegrenzung (Windows)", "%", "cpufreq", 3,
+  "Windows meldet, dass die CPU-Leistung begrenzt wird (Temperatur, Strom-Limit oder Energiesparplan). "
+  "Energiesparplan 'Höchstleistung' testen und Kühlung prüfen.")
 m("cpu_throttle_s", "Throttle-Ereignisse/s", "/s", "cpufreq", 0.5,
   "Die CPU drosselt sich wegen Temperatur (Kernel-Zähler thermal_throttle).")
 
 m("gpu_busy", "GPU-Last", "%", "gpu", 8, None,
   "Die GPU hat weniger zu tun – das Spiel wartet auf etwas anderes (CPU, Speicher, Shader-Kompilierung).")
 m("gpu_clock", "GPU-Takt", "MHz", "gpu", 150, None,
-  "Die GPU taktet herunter. AMD: power_dpm_force_performance_level / CoreCtrl prüfen; NVIDIA: PowerMizer "
-  "'Prefer Maximum Performance'. Kann auch Temperatur- oder Power-Limit sein.")
+  "Die GPU taktet herunter. Linux/AMD: power_dpm_force_performance_level / CoreCtrl prüfen; NVIDIA: "
+  "Energieverwaltung 'Maximale Leistung bevorzugen'. Kann auch Temperatur- oder Power-Limit sein.")
 m("gpu_mclk", "VRAM-Takt", "MHz", "gpu", 100, None, "Der Grafikspeicher taktet herunter (Energiesparzustand).")
 m("gpu_temp", "GPU-Temperatur", "°C", "gpu", 3, "Die Grafikkarte wird wärmer – Kühlung/Lüfterkurve prüfen.")
 m("gpu_temp_hot", "GPU Hotspot", "°C", "gpu", 3, "Der GPU-Hotspot steigt – nahe ~100 °C drosselt die Karte.")
@@ -83,6 +86,9 @@ m("gtt_used", "GTT (ausgelagert in RAM)", "MB", "vram", 200,
 
 m("mem_used", "RAM belegt", "MB", "mem", 500, "Mehr Arbeitsspeicher belegt.")
 m("mem_avail", "RAM frei", "MB", "mem", 500, None, HINT_RAM)
+m("commit_pct", "Zugesicherter Speicher (Windows)", "%", "mem", 3,
+  "Der zugesicherte Speicher (RAM + Auslagerungsdatei) wird knapp. Windows lagert dann massiv aus – oft durch "
+  "ein Speicherleck. Programme schließen, Auslagerungsdatei nicht deaktivieren, ggf. mehr RAM.")
 m("swap_used", "Swap belegt", "MB", "mem", 200, HINT_RAM)
 m("mem_dirty", "Dirty-Pages", "MB", "mem", 100, "Es wird gerade viel auf die Platte geschrieben.", chart=False)
 m("anon_huge", "Transparent Huge Pages", "MB", "mem", 200, chart=False)
@@ -160,6 +166,24 @@ PROCESS_HINTS = {
     "Battle.net.exe": "Battle.net-Launcher – lädt evtl. Updates.",
     "Agent.exe": "Blizzard-Update-Agent – lädt/prüft evtl. Spieldateien.",
     "steam": "Steam-Client (Downloads, Shader-Updates).",
+    # Windows
+    "MsMpEng.exe": "Windows Defender scannt – den Spiele-Ordner testweise als Ausnahme eintragen.",
+    "MpDefenderCoreService.exe": "Windows Defender – den Spiele-Ordner testweise als Ausnahme eintragen.",
+    "SearchIndexer.exe": "Windows-Suchindex arbeitet im Hintergrund.",
+    "TiWorker.exe": "Windows Update installiert im Hintergrund.",
+    "TrustedInstaller.exe": "Windows Update installiert im Hintergrund.",
+    "MoUsoCoreWorker.exe": "Windows Update sucht/lädt im Hintergrund.",
+    "wuauserv": "Windows Update.",
+    "CompatTelRunner.exe": "Windows-Telemetrie (Kompatibilitätsprüfung) – läuft gelegentlich mit hoher Last.",
+    "OneDrive.exe": "OneDrive synchronisiert gerade.",
+    "dwm.exe": "Desktop Window Manager (Windows-Compositor). Viel Last hier → Fenster-/Overlay-Probleme.",
+    "audiodg.exe": "Windows-Audio. Viel CPU → Audio-Effekte/Treiber prüfen.",
+    "NVIDIA Overlay.exe": "NVIDIA-Overlay/Aufnahme (Instant Replay) kostet Leistung.",
+    "nvcontainer.exe": "NVIDIA-Hintergrunddienst.",
+    "RadeonSoftware.exe": "AMD-Software (Overlay/Aufnahme) kostet Leistung.",
+    "msedge.exe": "Edge im Hintergrund (Videos/Tabs können GPU/CPU nutzen).",
+    "Widgets.exe": "Windows-Widgets im Hintergrund.",
+    "Overwolf.exe": "Overwolf-Overlay kostet Leistung.",
 }
 
 
@@ -184,6 +208,15 @@ KERNEL_HINTS = [
     ("out of memory", "Der Speicher war voll (OOM-Killer)."),
     ("usb", "USB-Geräte (dis)connects – wackelige Geräte können Interrupt-Stürme auslösen."),
     ("hung task", "Ein Prozess hing länger in einer Kernel-Operation."),
+    # Windows-Ereignisprotokoll
+    ("(id 4101)", "Der Grafiktreiber hat nicht mehr reagiert und wurde neu gestartet (TDR) – Treiber neu "
+                  "installieren (DDU), Übertaktung zurücknehmen."),
+    ("nvlddmkm", "NVIDIA-Treiberfehler – Treiber neu installieren, Übertaktung prüfen."),
+    ("amdkmdag", "AMD-Treiberfehler – Treiber neu installieren, Übertaktung prüfen."),
+    ("whea", "Hardwarefehler (WHEA) – oft instabile Übertaktung/RAM-Profil (XMP/EXPO) oder Temperatur."),
+    ("resource-exhaustion", "Windows meldet zu wenig Arbeitsspeicher – Speicherleck oder zu kleine Auslagerungsdatei."),
+    ("kernel-power", "Unerwarteter Neustart/Stromausfall."),
+    ("disk", "Datenträgerfehler – SSD/HDD prüfen."),
 ]
 
 

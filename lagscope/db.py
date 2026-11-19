@@ -45,6 +45,15 @@ def connect(path=None):
     return con
 
 
+def connect_read(path=None):
+    """Light connection for the web server: no schema/pragma changes (those would wait for the logger's lock)."""
+    path = path or config.DB_FILE
+    if not os.path.exists(path):
+        return connect(path)
+    con = sqlite3.connect(path, timeout=30, check_same_thread=False)
+    return con
+
+
 def pack(obj):
     return zlib.compress(json.dumps(obj, separators=(",", ":")).encode(), 6)
 

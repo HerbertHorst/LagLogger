@@ -28,7 +28,7 @@ code, .mono { font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; fon
 .small { font-size: 12.5px; } .muted { color: var(--muted); }
 .top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; letter-spacing: .2px; }
+.brand { font-weight: 700; letter-spacing: .2px; display: flex; align-items: center; gap: 8px; }
 .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .tabs button { border: none; background: transparent; padding: 6px 12px; }
 .tabs button.on { background: var(--panel2); color: var(--text); font-weight: 600; }
@@ -83,5 +83,6 @@ tr.click { cursor: pointer; } tr.click:hover td { background: var(--panel2); }
 .u-legend .u-marker { width: 10px; height: 3px; }
 .u-select { background: rgba(108,156,255,.2); }
 .loading { opacity: .55; transition: opacity .2s; }
+input { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
 textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 ol, ul { padding-left: 20px; }
