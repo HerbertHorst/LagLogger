@@ -472,16 +472,17 @@ function renderAnalysis(a) {
   // Incidents
   h += `<div class="card"><h2>Alle Vorfälle</h2>`;
   if (a.incidents.length) {
-    h += `<table><tr><th>Zeit</th><th>Art</th><th>Vordergrund</th><th class="num">min im Spiel</th><th>Auffällig</th><th>Prozesse</th></tr>`;
+    h += `<div style="overflow-x:auto"><table><tr><th>Zeit</th><th>Art</th><th>Vordergrund</th><th class="num">min im Spiel</th><th class="num">Lag-Dauer</th><th>Auffällig</th><th>Prozesse</th></tr>`;
     for (const i of a.incidents) {
       const mets = (i.metrics || []).slice(0, 3).map((m) => `${m.z > 0 ? "↑" : "↓"}${esc(m.label)}`).join(", ");
       const prs = (i.procs || []).slice(0, 3).map((p) => esc(p.name) + (p.new ? "*" : "")).join(", ");
       h += `<tr class="click" data-from="${i.start - 300}" data-to="${i.end + 300}" data-ts="${i.ts}">
         <td>${fmtTime(i.ts)}</td><td><span class="pill ${i.kind}">${KIND_LABEL[i.kind]}</span></td>
         <td>${esc(i.fg || "")}</td><td class="num">${i.game_min != null ? Math.round(i.game_min) : "–"}</td>
+        <td class="num" title="aus den FPS: vom Beginn des Einbruchs, bis die FPS wieder normal waren">${i.lag_seconds != null ? (i.lag_seconds >= 1800 ? "≥ " : "") + fmtDur(i.lag_seconds) : "–"}</td>
         <td class="small">${mets || "–"}</td><td class="small">${prs || "–"}</td></tr>`;
     }
-    h += `</table><p class="small muted">Klick auf eine Zeile öffnet den Verlauf um diesen Zeitpunkt. * = Prozess lief vorher nicht.</p>`;
+    h += `</table></div><p class="small muted">Klick auf eine Zeile öffnet den Verlauf um diesen Zeitpunkt. * = Prozess lief vorher nicht. Lag-Dauer und Vergleich „normal“ kommen aus den FPS (MangoHud/PresentMon), wenn vorhanden – dann reicht die eine Lag-Taste.</p>`;
   } else h += '<div class="muted">Noch keine Vorfälle. Shortcut einrichten (Tab „Einrichtung“) und beim nächsten Lag drücken.</div>';
   h += "</div>";
 
@@ -566,7 +567,8 @@ function setupWindows(st) {
   </div>
 
   <div class="card"><h2>2. Tastenkürzel (schon aktiv)</h2>
-    <p>Unter Windows sind die Tastenkürzel eingebaut – sie funktionieren auch im Vollbild-Spiel. Zur Bestätigung piept es kurz.</p>
+    <p>Unter Windows sind die Tastenkürzel eingebaut – sie funktionieren auch im Vollbild-Spiel. Zur Bestätigung piept es kurz.
+    <b>Beim Spielen reicht „Lag markieren“</b>: Mit FPS-Messung erkennt Lagscope selbst, wann der Lag anfing, wann er vorbei war und was „normal“ ist.</p>
     <div class="kv">${hkRow("lag", "Lag markieren")}${hkRow("good", "Läuft gut")}${hkRow("end", "Lag vorbei")}</div>
     <p class="small muted">Ändern: <code>"hotkeys"</code> in <code>config.json</code> (z. B. <code>"ctrl+alt+f9"</code>), dann Logger neu starten.</p>
   </div>
@@ -606,7 +608,8 @@ function setupLinux(st) {
   </div>
 
   <div class="card"><h2>2. Tastenkürzel zum Markieren</h2>
-    <p>Lege ein globales Tastenkürzel an, das du drückst, sobald es ruckelt. Es speichert den Zeitpunkt, das Fenster im Vordergrund und alle laufenden Prozesse.</p>
+    <p>Lege ein globales Tastenkürzel an, das du drückst, sobald es ruckelt. Es speichert den Zeitpunkt, das Fenster im Vordergrund und alle laufenden Prozesse.
+    <b>Nötig ist nur „Lag markieren“</b> – mit MangoHud erkennt Lagscope selbst, wann der Lag anfing, wann er vorbei war und was „normal“ ist.</p>
     <div class="toolbar"><button class="primary" data-setup="launchers_on">${su.launchers ? "Menüeinträge neu anlegen" : "Menüeinträge anlegen"}</button>
     ${su.launchers ? '<button data-setup="launchers_off">Menüeinträge entfernen</button>' : ""}</div>
     <p class="small"><b>KDE Plasma (z. B. Bazzite, CachyOS, Kubuntu):</b> Systemeinstellungen → Tastatur → Kurzbefehle → „Neu“ → „Anwendung“ → <i>Lagscope: Lag markieren</i> wählen → Taste festlegen (z. B. <code>Strg+Alt+L</code>). Optional genauso für <i>Läuft gut</i> und <i>Lag vorbei</i>.</p>

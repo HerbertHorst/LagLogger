@@ -55,6 +55,25 @@ def main():
             ok("vram_pct" in alerts, "Analyse erkennt volles VRAM")
             ok("shader_cpu" in keys, "Analyse erkennt Shader-Kompilierung")
             ok(any(p["name"] == "fossilize_replay" for p in a["processes"]), "Analyse erkennt Prozess fossilize_replay")
+        # Nur die Lag-Taste (keine "läuft gut"-Marker): FPS liefern Vergleich und Lag-Dauer
+        import sqlite3
+        c = sqlite3.connect(os.path.join(demo_env["LAGSCOPE_DATA"], "lagscope.db"))
+        c.execute("DELETE FROM markers WHERE kind != 'lag'")
+        c.commit()
+        c.close()
+        r = subprocess.run(base + ["analyze", "--json"], env=demo_env, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=300)
+        if r.returncode == 0:
+            a = json.loads(r.stdout)
+            ok(a["n_good"] == 0 and all(i["by_fps"] for i in a["incidents"]),
+               "nur Lag-Marker: Zeitfenster aus den FPS")
+            ok(all("normalen FPS" in (i["baseline"] or "") for i in a["incidents"]),
+               "nur Lag-Marker: Vergleich mit Momenten normaler FPS")
+            ok({"vram_pct", "shader_cpu"} <= {x["key"] for x in a["alerts"]} and
+               any(p["name"] == "fossilize_replay" and p["new"] >= 3 for p in a["processes"]),
+               "nur Lag-Marker: VRAM und Shader-Kompilierung trotzdem erkannt")
+        else:
+            ok(False, "Analyse ohne 'läuft gut'-Marker: " + r.stderr[-500:])
 
     # ---- 2. Selbsttest
     print("Selbsttest", flush=True)
@@ -133,7 +152,23 @@ def main():
     if FAILS or "-v" in sys.argv:
         print("---- Logger-Log ----\n" + text[-3000:])
 
-    # ---- 4. MangoHud-Import
+    # ---- 4. Lag-Zeitfenster aus FPS (Einbruch beginnt vor dem Tastendruck und endet später)
+    if not exe:
+        sys.path.insert(0, ROOT)
+        from lagscope import analysis
+        t0 = 1_000_000
+        rows = [(t0 + i, 150.0 if (i < 1200 or i >= 1500) else 40.0, 10, 7) for i in range(2400)]
+        sf = analysis.SessionFps(rows, t0)
+        span = sf.lag_span(t0 + 1290, t0 + 60, t0 + 2400)   # Taste 90 s nach Beginn des Einbruchs gedrückt
+        ok(span is not None and abs(span[0] - (t0 + 1200)) <= 10 and abs(span[1] - (t0 + 1500)) <= 15,
+           f"Lag-Beginn/-Ende aus FPS erkannt ({span and (span[0] - t0, span[1] - t0)} statt 1200/1500)")
+        ok(sf.lag_span(t0 + 600, t0 + 60, t0 + 2400) is None, "Marker bei normalen FPS bleibt beim Standardfenster")
+        # Lag bis Sitzungsende (60 % der Sitzung): "normal" darf nicht der Lag-Wert sein
+        rows = [(t0 + i, 150.0 if i < 1000 else 40.0, 10, 7) for i in range(2500)]
+        sf = analysis.SessionFps(rows, t0)
+        ok(sf.ref >= 140, f"Bezug 'normale FPS' trotz langem Lag richtig ({sf.ref})")
+
+    # ---- 5. MangoHud-Import
     if not exe:
         sys.path.insert(0, ROOT)
         from lagscope import mangohud

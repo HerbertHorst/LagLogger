@@ -41,7 +41,7 @@ Die Downloads werden bei jeder Änderung automatisch gebaut und auf echtem Windo
 | Sieht man, dass es läuft? | **Symbol im Infobereich der Taskleiste** (rechts unten, ggf. im ^-Menü). Rechtsklick: Auswertung öffnen · Lag markieren · Beenden | Kein Symbol – Status steht oben rechts in der Auswertung; Menüeintrag „Lagscope“ öffnet sie |
 | Autostart | Einrichtung → „Autostart aktivieren“ | Einrichtung → „Autostart aktivieren“ |
 | Lag markieren | **`Strg+Alt+L`** – eingebaut, funktioniert im Vollbild, piept zur Bestätigung | eigenes Tastenkürzel in KDE/GNOME (siehe unten), Bestätigung als Benachrichtigung |
-| „Läuft gut“ / „Lag vorbei“ | `Strg+Alt+G` / `Strg+Alt+K` | eigene Tastenkürzel (optional) |
+| „Läuft gut“ / „Lag vorbei“ (optional, mit FPS-Daten unnötig) | `Strg+Alt+G` / `Strg+Alt+K` | eigene Tastenkürzel (optional) |
 | FPS | **automatisch** mit PresentMon (liegt bei) – einmalig Berechtigung erteilen | MangoHud – einmalig eine Startoption in Steam |
 | Temperaturen | optional mit LibreHardwareMonitor | automatisch |
 | Auswertung | Tray-Symbol → „Auswertung öffnen“ oder Doppelklick auf die EXE | Doppelklick oder Menüeintrag „Lagscope“ |
@@ -137,20 +137,35 @@ PresentMon mit laufendem Spiel – das ist der Teil, den man einmal von Hand aus
 
 ## Was die Marker bedeuten
 
+**Beim Spielen reicht eine Taste: „Lag“** (Windows: `Strg+Alt+L`). Die anderen beiden sind optional.
+
 | Marker | Bedeutung |
 |---|---|
-| **Lag** | „Jetzt laggt es.“ Ausgewertet werden die 90 s davor bis 60 s danach (der Lag hat meist schon kurz vorher angefangen). Gespeichert werden zusätzlich das Fenster im Vordergrund und die komplette Prozessliste. |
-| **Läuft gut** | „Jetzt ist alles normal.“ Dient als Vergleich. |
-| **Lag vorbei** | Beendet das Lag-Zeitfenster vorzeitig (z. B. nach Neustart des Spiels). |
+| **Lag** | „Jetzt laggt es.“ Gespeichert werden zusätzlich das Fenster im Vordergrund und die komplette Prozessliste. |
+| **Läuft gut** (optional) | „Jetzt ist alles normal.“ Zusätzlicher Vergleichspunkt – mit FPS-Daten nicht nötig. |
+| **Lag vorbei** (optional) | Beendet das Lag-Zeitfenster – mit FPS-Daten nicht nötig. |
+
+**Mit FPS-Daten** (PresentMon unter Windows, MangoHud unter Linux) erkennt Lagscope selbst:
+- **wann der Lag angefangen hat** – auch wenn du erst später drückst (bis zu 10 min zurück),
+- **wann er vorbei war** – sobald die FPS wieder normal sind (bis zu 30 min, „Lag-Dauer“ in der Analyse),
+- **was „normal“ ist** – alle Momente der Sitzung mit normalen FPS, vor *und* nach dem Lag,
+- **Einbrüche ohne Tastendruck** – FPS deutlich unter normal für mindestens 10 s zählen als eigener Vorfall.
+
+„Normal“ ist dabei das 80. Perzentil der FPS einer Spielsitzung (nicht der Durchschnitt) – so bleibt der Bezug auch
+dann richtig, wenn der Lag bis zum Neustart anhält und mehr als die halbe Sitzung ausmacht.
+
+**Ohne FPS-Daten** wertet Lagscope die 90 s vor bis 60 s nach dem Tastendruck aus und vergleicht mit der Zeit vor dem
+ersten Lag der Sitzung, „Läuft gut“-Markern und Sitzungen ohne Lag.
 
 Marker kann man auch nachträglich im Verlauf setzen (in ein Diagramm klicken → „Hier war Lag“), mit Notizen
 versehen oder löschen.
 
 ## Wie die Analyse funktioniert
 
-Für jeden Vorfall (Marker oder automatisch erkannter FPS-Einbruch) wird das Zeitfenster rund um den Lag mit
-**normalem Spielen** verglichen – bevorzugt mit derselben Spielsitzung vor dem Lag, sonst mit „Läuft gut“-Markern
-oder Sitzungen ganz ohne Lag. Gemeldet wird nur, was bei **den meisten** Vorfällen auffällt:
+Für jeden Vorfall (Marker oder automatisch erkannter FPS-Einbruch) wird der **Beginn des Lags** (dort sieht man den
+Auslöser) mit **normalem Spielen** verglichen – mit FPS-Daten mit allen Momenten normaler FPS, sonst mit der Zeit vor
+dem Lag, „Läuft gut“-Markern oder Sitzungen ganz ohne Lag (siehe oben). Gemeldet wird nur, was bei **den meisten**
+Vorfällen auffällt:
 
 - **Messwerte**, die bei Lags deutlich höher/niedriger sind (robuster Vergleich mit Median) – jeweils mit
   Erklärung, was das bedeutet und was man tun kann.

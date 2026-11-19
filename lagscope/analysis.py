@@ -21,6 +21,19 @@ def _median(v):
     return statistics.median(v) if v else None
 
 
+def _pct(v, q):
+    """q-quantile (0..1) of a list."""
+    if not v:
+        return None
+    v = sorted(v)
+    return v[min(len(v) - 1, int(q * (len(v) - 1) + 0.5))]
+
+
+# "Normale" FPS einer Sitzung = 80. Perzentil, nicht Median: wenn der Lag bis zum Neustart anhält,
+# besteht oft mehr als die halbe Sitzung aus Lag – der Median wäre dann schon der Lag-Wert.
+FPS_REF_Q = 0.8
+
+
 def _mad(v, med):
     return statistics.median([abs(x - med) for x in v]) if v else 0.0
 
@@ -71,7 +84,7 @@ def detect_fps_drops(con, cfg, sessions):
         if len(rows) < 120:
             continue
         fps = [r[1] for r in rows]
-        med = _median(fps)
+        med = _pct(fps, FPS_REF_Q)  # Bezug "normale FPS" (siehe FPS_REF_Q)
         if not med or med < 10:
             continue
         thr = med * ratio
@@ -94,6 +107,67 @@ def detect_fps_drops(con, cfg, sessions):
     return out
 
 
+FPS_OK = 0.85       # FPS ≥ 85 % des Sitzungs-Medians = "normal"
+FPS_NORMAL = 0.9    # für die Vergleichsbasis etwas strenger
+
+
+class SessionFps:
+    """Per-second FPS of one game session (from MangoHud or PresentMon)."""
+
+    def __init__(self, rows, start):
+        self.fps = {r[0]: r[1] for r in rows}
+        vals = [r[1] for r in rows if r[0] >= start + 60] or [r[1] for r in rows]
+        self.ref = _pct(vals, FPS_REF_Q) or 0
+
+    def at(self, ts):
+        """FPS around a timestamp (average of the two seconds before it), or None."""
+        v = [self.fps[s] for s in (int(ts), int(ts) - 1, int(ts) - 2) if s in self.fps]
+        return sum(v) / len(v) if v else None
+
+    def rolling(self, sec, width=5):
+        v = [self.fps[x] for x in range(sec - width + 1, sec + 1) if x in self.fps]
+        return sum(v) / len(v) if v else None
+
+    def ok(self, sec):
+        r = self.rolling(sec)
+        return None if r is None else r >= FPS_OK * self.ref
+
+    def lag_span(self, t, lo, hi):
+        """Around a lag marker at t: when did the FPS drop start and when were they normal again?
+
+        Returns (start, end) or None if the FPS were not low around t."""
+        near = [self.fps[x] for x in range(int(t) - 20, int(t) + 21) if x in self.fps]
+        if len(near) < 10 or sum(near) / len(near) >= FPS_OK * self.ref:
+            return None
+        start, run = None, 0
+        for sec in range(int(t), int(max(lo, t - 600)), -1):   # rückwärts: Beginn des Einbruchs (max. 10 min)
+            st = self.ok(sec)
+            run = run + 1 if st else 0
+            if run >= 15:
+                start = sec + 15
+                break
+        end, run = None, 0
+        for sec in range(int(t), int(min(hi, t + 1800))):      # vorwärts: wieder normal (max. 30 min)
+            st = self.ok(sec)
+            if st is None and sec - int(t) > 120 and not any(x in self.fps for x in range(sec, sec + 60)):
+                end = sec  # keine FPS-Daten mehr (Spiel beendet)
+                break
+            run = run + 1 if st else 0
+            if run >= 30:
+                end = sec - 30
+                break
+        return (start if start is not None else max(lo, t - 600)), (end if end is not None else min(hi, t + 1800))
+
+
+def session_fps(con, s, cache):
+    if s is None:
+        return None
+    if s["id"] not in cache:
+        rows = db.load_fps(con, s["start"], s["end"] or time.time())
+        cache[s["id"]] = SessionFps(rows, s["start"]) if len(rows) >= 120 else None
+    return cache[s["id"]]
+
+
 def _session_for(ts, sessions):
     for s in sessions:
         if s["start"] - 30 <= ts <= (s["end"] or time.time()) + 30:
@@ -101,8 +175,9 @@ def _session_for(ts, sessions):
     return None
 
 
-def build_incidents(con, cfg, sessions, include_auto=True):
+def build_incidents(con, cfg, sessions, include_auto=True, fps_cache=None):
     before, after = float(cfg["lag_before"]), float(cfg["lag_after"])
+    fps_cache = {} if fps_cache is None else fps_cache
     ms = db.markers(con)
     stops = sorted(m["ts"] for m in ms if m["kind"] in ("end", "good"))
     incidents = []
@@ -117,13 +192,26 @@ def build_incidents(con, cfg, sessions, include_auto=True):
             end = min(end, nxt[0])
         if s and s["end"]:
             end = min(end, s["end"])
-        incidents.append(dict(kind="lag", ts=t, start=t - before, end=max(end, t + 5), session=s, marker=m))
+        start, by_fps = t - before, False
+        sf = session_fps(con, s, fps_cache)
+        if sf:
+            hi = min([x for x in (s["end"], nxt[0] if nxt else None) if x] or [time.time()])
+            span = sf.lag_span(t, s["start"] + 60, hi)
+            if span:
+                # Zeitfenster aus den FPS: vom Beginn des Einbruchs bis die FPS wieder normal sind
+                start, end, by_fps = min(span[0] - 30, t - 30), max(span[1], t + 5), True
+        incidents.append(dict(kind="lag", ts=t, start=start, end=max(end, t + 5), session=s, marker=m,
+                              by_fps=by_fps))
     if include_auto:
         for d in detect_fps_drops(con, cfg, sessions):
             if any(i["start"] - 60 <= d["start"] <= i["end"] + 60 for i in incidents if i["kind"] == "lag"):
                 continue  # schon durch einen Marker abgedeckt
             incidents.append(dict(kind="auto", ts=d["start"], start=d["start"] - 30, end=d["end"],
-                                  session=d["session"], marker=None, median_fps=d["median_fps"]))
+                                  session=d["session"], marker=None, median_fps=d["median_fps"], by_fps=True))
+    for i in incidents:
+        # Ausgewertet wird der Beginn des Einbruchs (dort sieht man den Auslöser); bei langen Lags würde das
+        # ganze Fenster kurze Auslöser verwässern. "end" bleibt das Ende des Lags (FPS wieder normal).
+        i["a_end"] = min(i["end"], max(i["ts"], i["start"] + 60) + 120)
     incidents.sort(key=lambda i: i["ts"])
     return incidents
 
@@ -140,6 +228,39 @@ def baseline_windows(inc, incidents, sessions, good_markers):
     for g in good_markers:
         wins.append((g["ts"] - 60, g["ts"] + 30))
     return wins
+
+
+def fps_baseline(loader, inc, incidents, sessions, fps_cache, con, want=400):
+    """'Normal' = moments while gaming in which the FPS were really in the usual range.
+
+    Same session first (before *and* after the lag – the FPS tell us when it was fine), then other
+    sessions with FPS data. Returns (samples, snapshots, description) or None without FPS data."""
+    def good_times(s, sf):
+        windows = [(i["start"] - 60, i["end"] + 60) for i in incidents if i["session"] is s]
+        return lambda ts: (ts >= s["start"] + 90 and not any(a <= ts <= b for a, b in windows)
+                           and (sf.at(ts) or 0) >= FPS_NORMAL * sf.ref)
+    order = [inc["session"]] + [x for x in reversed(sessions) if x is not inc["session"]]
+    base, snaps, used = [], [], 0
+    for s in order:
+        sf = session_fps(con, s, fps_cache)
+        if not sf or not sf.ref:
+            continue
+        good = good_times(s, sf)
+        end = s["end"] or time.time()
+        smp = [x for x in loader.samples(s["start"], end) if x[1].get("game_running", 1) and good(x[0])]
+        if not smp:
+            continue
+        step = max(1, len(smp) // want) if s is not inc["session"] else 1
+        base.extend(smp[::step])
+        sn = [x for x in loader.procs(s["start"], end) if good(x[0])]
+        snaps.extend(sn[::max(1, len(sn) // 150)] if s is not inc["session"] else sn)
+        used += 1
+        if len(base) >= max(MIN_BASE * 5, want) or used >= 10:
+            break
+    if len(base) < MIN_BASE:
+        return None
+    same = inc["session"] is not None and used == 1 and session_fps(con, inc["session"], fps_cache) is not None
+    return base, snaps, ("Momente mit normalen FPS in derselben Sitzung" if same else "Momente mit normalen FPS")
 
 
 def clean_sessions(incidents, sessions):
@@ -233,7 +354,8 @@ def analyze(con, cfg, include_auto=True):
     t_start = time.time()
     loader = Loader(con)
     sessions = db.sessions(con)
-    incidents = build_incidents(con, cfg, sessions, include_auto)
+    fps_cache = {}
+    incidents = build_incidents(con, cfg, sessions, include_auto, fps_cache)
     all_markers = db.markers(con)
     good = [m for m in all_markers if m["kind"] == "good"]
     clean = clean_sessions(incidents, sessions)
@@ -259,14 +381,21 @@ def analyze(con, cfg, include_auto=True):
     inc_out = []
 
     for inc in incidents:
-        bad = loader.samples(inc["start"], inc["end"])
+        bad = loader.samples(inc["start"], inc["a_end"])
         bad = [x for x in bad if x[1].get("game_running", 1)] or bad
-        wins = baseline_windows(inc, incidents, sessions, good)
-        base, base_snaps = [], []
-        for a, b in wins:
-            base.extend(loader.samples(a, b))
-            base_snaps.extend(loader.procs(a, b))
-        base_kind = "Sitzung vor dem Lag" if len(base) >= MIN_BASE else None
+        fb = fps_baseline(loader, inc, incidents, sessions, fps_cache, con)
+        if fb:
+            base, base_snaps, base_kind = fb
+            for g in good:  # "Läuft gut"-Marker zählen zusätzlich
+                base = base + loader.samples(g["ts"] - 60, g["ts"] + 30)
+                base_snaps = base_snaps + loader.procs(g["ts"] - 60, g["ts"] + 30)
+        else:
+            wins = baseline_windows(inc, incidents, sessions, good)
+            base, base_snaps = [], []
+            for a, b in wins:
+                base.extend(loader.samples(a, b))
+                base_snaps.extend(loader.procs(a, b))
+            base_kind = "Sitzung vor dem Lag" if len(base) >= MIN_BASE else None
         if len(base) < MIN_BASE and len(global_base) >= MIN_BASE:
             base, base_snaps, base_kind = base + global_base, base_snaps + global_snaps, "Sitzungen ohne Lag"
         if len(base) < MIN_BASE:
@@ -276,6 +405,7 @@ def analyze(con, cfg, include_auto=True):
             base_kind = "5–20 min vorher (wenig Vergleichsdaten)"
 
         rec = dict(kind=inc["kind"], ts=inc["ts"], start=inc["start"], end=inc["end"], baseline=base_kind,
+                   by_fps=inc.get("by_fps", False), lag_seconds=round(inc["end"] - inc["start"]) if inc.get("by_fps") else None,
                    n_bad=len(bad), n_base=len(base),
                    session=inc["session"]["id"] if inc["session"] else None,
                    marker_id=inc["marker"]["id"] if inc["marker"] else None,
@@ -313,7 +443,7 @@ def analyze(con, cfg, include_auto=True):
         rec["metrics"] = tops[:8]
 
         # --- Prozesse vergleichen
-        bsn = loader.procs(inc["start"], inc["end"])
+        bsn = loader.procs(inc["start"], inc["a_end"])
         procs_rec = []
         if bsn and base_snaps:
             pb, _ = _proc_stats(bsn)
@@ -337,7 +467,7 @@ def analyze(con, cfg, include_auto=True):
         rec["procs"] = procs_rec[:8]
 
         # --- Ereignisse rund um den Vorfall
-        evs = db.events(con, inc["start"] - 300, inc["end"])
+        evs = db.events(con, inc["start"] - 300, inc["a_end"])
         kern, starts, states = [], [], []
         seen_k = set()
         for e in evs:
