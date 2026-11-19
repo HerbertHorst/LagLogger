@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lagscope</title>
+<link rel="stylesheet" href="/uPlot.min.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">Lagscope</div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="timeline" class="on">Verlauf</button>
+    <button data-tab="analysis">Analyse</button>
+    <button data-tab="events">Ereignisse</button>
+    <button data-tab="setup">Einrichtung</button>
+  </nav>
+  <div class="status" id="status"><span class="dot"></span><span class="txt">…</span></div>
+</header>
+
+<main>
+  <!-- ======================= Verlauf ======================= -->
+  <section id="tab-timeline" class="tab on">
+    <div class="toolbar">
+      <div class="group">
+        <button data-span="900">15 min</button>
+        <button data-span="3600">1 h</button>
+        <button data-span="10800">3 h</button>
+        <button data-span="43200">12 h</button>
+        <button data-span="86400">24 h</button>
+        <button data-span="259200">3 Tage</button>
+        <button data-span="604800">7 Tage</button>
+      </div>
+      <div class="group">
+        <button id="prev" title="Zurück">◀</button>
+        <button id="zoomout" title="Herauszoomen">−</button>
+        <button id="next" title="Vor">▶</button>
+        <button id="live" title="Immer die neuesten Daten zeigen">Live</button>
+      </div>
+      <select id="sessionSel"><option value="">Spielsitzung wählen …</option></select>
+      <span class="range" id="rangeTxt"></span>
+    </div>
+    <div class="hint small">Bereich im Diagramm mit der Maus ziehen = hineinzoomen · Klick = Prozesse zu diesem Zeitpunkt</div>
+    <div class="markers" id="markerChips"></div>
+    <div class="groups" id="groupToggles"></div>
+    <div class="layout">
+      <div id="charts" class="charts"></div>
+      <aside id="detail" class="detail">
+        <div class="empty">In ein Diagramm klicken, um zu sehen, welche Prozesse zu diesem Zeitpunkt liefen.</div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ======================= Analyse ======================= -->
+  <section id="tab-analysis" class="tab">
+    <div class="toolbar">
+      <button id="runAnalysis" class="primary">Neu analysieren</button>
+      <label class="chk"><input type="checkbox" id="useAuto" checked> FPS-Einbrüche aus MangoHud automatisch einbeziehen</label>
+      <span class="small muted" id="analysisMeta"></span>
+    </div>
+    <div id="analysisOut"><div class="empty">Analyse wird geladen …</div></div>
+  </section>
+
+  <!-- ======================= Ereignisse ======================= -->
+  <section id="tab-events" class="tab">
+    <div class="toolbar">
+      <span class="small muted">Ereignisse im gewählten Zeitraum (Tab „Verlauf“).</span>
+      <div class="group" id="eventKinds"></div>
+    </div>
+    <div id="eventsOut"></div>
+  </section>
+
+  <!-- ======================= Einrichtung ======================= -->
+  <section id="tab-setup" class="tab">
+    <div id="setupOut"></div>
+  </section>
+</main>
+
+<script src="/uPlot.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

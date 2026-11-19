@@ -1,0 +1,11 @@
+LAGSCOPE – findet heraus, warum Spiele unter Linux plötzlich ruckeln
+
+1. Diesen Ordner irgendwohin kopieren (z. B. ~/Programme/lagscope).
+2. Doppelklick auf "Lagscope.desktop" (beim ersten Mal "Vertrauen"/"Ausführen erlauben").
+   Geht das nicht: Terminal in diesem Ordner öffnen und  python3 lagscope  eingeben.
+3. Im Browser öffnet sich die Auswertung. Im Tab "Einrichtung":
+   Autostart aktivieren, Menüeinträge anlegen, Tastenkürzel für "Lagscope: Lag markieren" festlegen.
+4. Beim Spielen: wenn es ruckelt, Tastenkürzel drücken. Später Tab "Analyse" ansehen.
+
+Die Daten liegen im Ordner "lagscope-data" neben dieser Datei.
+Ausführliche Anleitung: README.md im Repository.
