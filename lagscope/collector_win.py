@@ -564,15 +564,97 @@ def parse_hotkey(combo):
     return (mods, vk) if vk else None
 
 
+LRESULT = ctypes.c_ssize_t
+HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, wt.WPARAM, wt.LPARAM)
+
+
+class KBDLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [("vkCode", wt.DWORD), ("scanCode", wt.DWORD), ("flags", wt.DWORD), ("time", wt.DWORD),
+                ("dwExtraInfo", ctypes.c_size_t)]
+
+
+user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, wt.HINSTANCE, wt.DWORD]
+user32.SetWindowsHookExW.restype = ctypes.c_void_p
+user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, wt.WPARAM, wt.LPARAM]
+user32.CallNextHookEx.restype = LRESULT
+user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+user32.GetAsyncKeyState.restype = ctypes.c_short
+user32.SetTimer.argtypes = [wt.HWND, ctypes.c_size_t, wt.UINT, ctypes.c_void_p]
+user32.SetTimer.restype = ctypes.c_size_t
+k32.GetModuleHandleW.argtypes = [wt.LPCWSTR]
+k32.GetModuleHandleW.restype = wt.HMODULE
+
+WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_HOTKEY, WM_TIMER = 0x100, 0x101, 0x104, 0x105, 0x312, 0x113
+MOD_VKS = {1: (0x12,), 2: (0x11,), 4: (0x10,), 8: (0x5B, 0x5C)}  # alt, ctrl, shift, win
+
+
 class Hotkeys:
+    """Global hotkeys on two ways at once:
+
+    * RegisterHotKey – the normal Windows way. Many games switch it off while they are in the foreground
+      (raw input with RIDEV_NOHOTKEYS) – exactly when you need it.
+    * a low-level keyboard hook (like Discord push-to-talk) – also sees keys while such a game is active.
+      Keys are only looked at, never swallowed. Windows silently drops slow hooks, so it is renewed every minute.
+
+    Both report into the same queue; a second report of the same key within a second is ignored.
+    """
+
     def __init__(self, combos):
         self.combos = combos or {}
         self.events = []
         self.status = {}
         self.lock = threading.Lock()
         self.thread_id = None
-        self.pressed = 0      # wie oft ein Kürzel angekommen ist (Diagnose)
+        self.pressed = 0          # wie oft ein Kürzel erkannt wurde (Diagnose)
+        self.last = None          # (Zeit, Art, Weg)
+        self.hook_ok = False
+        self._last_fire = {}
+        self._down = set()
+        self._by_vk = {}
+        self._hook = None
+        self._proc = HOOKPROC(self._ll)  # Referenz behalten
         threading.Thread(target=self._loop, daemon=True, name="hotkeys").start()
+
+    def _fire(self, kind, via):
+        now = time.time()
+        with self.lock:
+            if now - self._last_fire.get(kind, 0) < 1.0:
+                return  # schon über den anderen Weg erkannt
+            self._last_fire[kind] = now
+            self.pressed += 1
+            self.last = (now, kind, via)
+            self.events.append((now, kind))
+
+    def _mods_down(self, mods):
+        for bit, vks in MOD_VKS.items():
+            if mods & bit and not any(user32.GetAsyncKeyState(vk) & 0x8000 for vk in vks):
+                return False
+        return True
+
+    def _ll(self, code, wparam, lparam):
+        try:
+            if code == 0:
+                kb = KBDLLHOOKSTRUCT.from_address(lparam)
+                vk = kb.vkCode
+                if wparam in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                    if vk in self._by_vk and vk not in self._down:  # nur beim ersten Drücken, nicht beim Halten
+                        self._down.add(vk)
+                        for mods, kind in self._by_vk[vk]:
+                            if self._mods_down(mods):
+                                self._fire(kind, "Tastatur-Hook")
+                                break
+                elif wparam in (WM_KEYUP, WM_SYSKEYUP):
+                    self._down.discard(vk)
+        except Exception:
+            pass
+        return user32.CallNextHookEx(None, code, wparam, lparam)
+
+    def _install_hook(self):
+        if self._hook:
+            user32.UnhookWindowsHookEx(self._hook)
+        self._hook = user32.SetWindowsHookExW(13, self._proc, k32.GetModuleHandleW(None), 0)  # WH_KEYBOARD_LL
+        self.hook_ok = bool(self._hook)
 
     def _loop(self):
         self.thread_id = k32.GetCurrentThreadId()
@@ -582,24 +664,34 @@ class Hotkeys:
             if not hk:
                 self.status[kind] = f"{combo}: ungültig"
                 continue
+            self._by_vk.setdefault(hk[1], []).append((hk[0], kind))
             if user32.RegisterHotKey(None, i, hk[0] | 0x4000, hk[1]):  # MOD_NOREPEAT
                 ids[i] = kind
                 self.status[kind] = f"{combo}: aktiv"
             else:
-                self.status[kind] = f"{combo}: schon von einem anderen Programm belegt"
-        if not ids:
+                # von einem anderen Programm belegt – der Tastatur-Hook erkennt es trotzdem
+                self.status[kind] = f"{combo}: aktiv (über Tastatur-Hook; Kürzel ist auch in einem anderen Programm belegt)"
+        if not self._by_vk:
             return
+        self._install_hook()
+        user32.SetTimer(None, 0, 60000, None)  # Hook jede Minute erneuern
         msg = wt.MSG()
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-            if msg.message == 0x0312 and msg.wParam in ids:  # WM_HOTKEY
-                with self.lock:
-                    self.pressed += 1
-                    self.events.append((time.time(), ids[msg.wParam]))
+            if msg.message == WM_HOTKEY and msg.wParam in ids:
+                self._fire(ids[msg.wParam], "Windows-Hotkey")
+            elif msg.message == WM_TIMER:
+                self._install_hook()
 
     def drain(self):
         with self.lock:
             out, self.events = self.events, []
         return out
+
+    def info(self):
+        with self.lock:
+            last = self.last
+        return dict(status=self.status, hook=self.hook_ok, pressed=self.pressed,
+                    last=dict(ts=last[0], kind=last[1], via=last[2]) if last else None)
 
 
 # ---------------------------------------------------------------- event log
@@ -848,4 +940,5 @@ class SystemSampler:
         return dict(presentmon=self.pm.status, presentmon_path=self.pm.exe, lhm=self.lhm.ok,
                     hotkeys=self.hotkeys.status if self.hotkeys else {}, vram_total=self.vram_total,
                     hotkey_thread=self.hotkeys.thread_id if self.hotkeys else None,
-                    hotkey_pressed=self.hotkeys.pressed if self.hotkeys else 0)
+                    hotkey_pressed=self.hotkeys.pressed if self.hotkeys else 0,
+                    hotkey_info=self.hotkeys.info() if self.hotkeys else None)

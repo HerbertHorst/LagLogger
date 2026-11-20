@@ -179,12 +179,15 @@ def notify(title, body="", kind=None):
     """Short confirmation: desktop notification on Linux, a short beep on Windows (works in fullscreen games)."""
     if IS_WIN:
         def beep():
+            import winsound
             try:
-                import winsound
                 for f, d in BEEPS.get(kind or "", [(700, 150)]):
                     winsound.Beep(f, d)
             except Exception:
-                pass
+                try:  # manche PCs haben keinen "Beep" – dann den Windows-Hinweiston
+                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                except Exception:
+                    pass
         threading.Thread(target=beep, daemon=True).start()
         return
     import shutil

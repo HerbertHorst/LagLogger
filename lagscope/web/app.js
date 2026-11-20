@@ -570,6 +570,8 @@ function setupWindows(st) {
     <p>Unter Windows sind die Tastenkürzel eingebaut – sie funktionieren auch im Vollbild-Spiel. Zur Bestätigung piept es kurz.
     <b>Beim Spielen reicht „Lag markieren“</b>: Mit FPS-Messung erkennt Lagscope selbst, wann der Lag anfing, wann er vorbei war und was „normal“ ist.</p>
     <div class="kv">${hkRow("lag", "Lag markieren")}${hkRow("good", "Läuft gut")}${hkRow("end", "Lag vorbei")}</div>
+    <div class="card" style="margin:8px 0;padding:8px 10px;background:var(--panel2)"><b>Test:</b> jetzt <code>${esc(hk.good || "ctrl+alt+g")}</code> drücken (setzt einen harmlosen „Läuft gut“-Marker).
+      <div id="hkLive" class="small" style="margin-top:4px">${hotkeyLive(w.hotkey_info)}</div></div>
     <p class="small muted">Ändern: <code>"hotkeys"</code> in <code>config.json</code> (z. B. <code>"ctrl+alt+f9"</code>), dann Logger neu starten.</p>
   </div>
 
@@ -592,6 +594,14 @@ function setupWindows(st) {
     <p class="small">Status: <b>${w.lhm ? "verbunden ✓" : "nicht erreichbar"}</b>${st.setup.tools["nvidia-smi"] ? " · NVIDIA-Werte kommen auch ohne über nvidia-smi" : ""}</p>
   </div>
   </div>`;
+}
+
+function hotkeyLive(info) {
+  if (!info) return '<span class="muted">Logger läuft nicht – Tastenkürzel sind aus.</span>';
+  const hook = info.hook ? "Tastatur-Hook aktiv ✓ (funktioniert auch in Spielen)" : "Tastatur-Hook nicht aktiv";
+  if (!info.last) return `${hook}<br>Noch kein Tastendruck erkannt.`;
+  const ago = Math.max(0, Math.round(Date.now() / 1000 - info.last.ts));
+  return `${hook}<br><b>Zuletzt erkannt: ${fmtTime(info.last.ts, false)}</b> (vor ${fmtDur(ago)}) – ${esc(KIND_LABEL[info.last.kind] || info.last.kind)}, über ${esc(info.last.via)} · insgesamt ${info.pressed}×`;
 }
 
 function setupLinux(st) {
@@ -716,6 +726,13 @@ function bindSetup() {
     };
   });
   if (S.info.status.platform !== "windows") loadMangohud();
+  clearInterval(S.hkTimer);
+  if ($("#hkLive")) {
+    S.hkTimer = setInterval(async () => {
+      if (!$("#tab-setup").classList.contains("on") || !$("#hkLive")) { clearInterval(S.hkTimer); return; }
+      try { const st = await api("/api/status"); $("#hkLive").innerHTML = hotkeyLive((st.win || {}).hotkey_info); } catch (e) { /* ignore */ }
+    }, 1500);
+  }
   $("#gameSave").onclick = async () => {
     const pats = $("#gamePat").value.split(",").map((x) => x.trim()).filter(Boolean);
     const r = await post("/api/config", { game_patterns: pats });

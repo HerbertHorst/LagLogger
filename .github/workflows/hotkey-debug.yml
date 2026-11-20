@@ -8,24 +8,28 @@ on:
 jobs:
   hotkeys:
     runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Quellcode
+      - name: Quellcode direkt
         run: python tools/win_hotkey_test.py
       - name: Quellcode losgelöst (wie Doppelklick)
         if: always()
         run: python tools/win_hotkey_test.py --detached
-      - name: EXE
+      - name: EXE (Ordner) bauen
         if: always()
         run: |
           python -m pip install pyinstaller==6.11.1
-          pyinstaller --onefile --noconsole --name lagscope --icon lagscope/web/icon.ico `
+          pyinstaller --onedir --noconsole --name lagscope --icon lagscope/web/icon.ico `
             --add-data "lagscope/web;lagscope/web" `
             --hidden-import lagscope.collector_win --hidden-import lagscope.tray_win lagscope.py
-          python tools/win_hotkey_test.py dist/lagscope.exe
+      - name: EXE direkt
+        if: always()
+        run: python tools/win_hotkey_test.py dist/lagscope/lagscope.exe
       - name: EXE losgelöst (wie Doppelklick)
         if: always()
-        run: python tools/win_hotkey_test.py dist/lagscope.exe --detached
+        run: python tools/win_hotkey_test.py dist/lagscope/lagscope.exe --detached
