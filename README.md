@@ -1,4 +1,4 @@
-# Lagscope
+# Lagscope (Fully AI VibeCoded check the vode before use)
 
 Findet heraus, **warum ein Spiel plötzlich ruckelt** – z. B. wenn Overwatch statt 100–160 FPS auf einmal nur
 noch 20–60 FPS schafft und nur ein Neustart hilft. Läuft unter **Linux und Windows**.
