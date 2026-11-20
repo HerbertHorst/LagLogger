@@ -623,24 +623,80 @@ function setupLinux(st) {
 
   <div class="card"><h2>3. FPS mitschreiben (MangoHud, empfohlen)</h2>
     <p>Lagscope kann FPS nicht selbst messen. Mit MangoHud erkennt es Lag-Beginn, Lag-Ende und „normal“ selbst – dann reicht die eine Lag-Taste.</p>
-    <p class="small">MangoHud ist ${su.tools.mangohud ? "<b>installiert</b>" : "<b>nicht gefunden</b> – über die Paketverwaltung installieren (Paket „mangohud“)"}. Einmalig einrichten – je nachdem, wie das Spiel gestartet wird:</p>
+    <div id="mhInstall" class="small" style="margin:6px 0"><span class="muted">MangoHud: wird geprüft …</span></div>
+    <p class="small">Dann einmalig einschalten – je nachdem, wie das Spiel gestartet wird:</p>
     <details open><summary class="small"><b>Steam</b> – auch Battle.net als Nicht-Steam-Spiel in Steam (üblich auf Bazzite)</summary>
-      <p class="small">Rechtsklick auf das Spiel bzw. auf den Battle.net-Eintrag → Eigenschaften → Startoptionen:</p>
+      <div class="toolbar" style="margin:6px 0"><button class="primary" data-copy="${esc(launch)}">📋 Startoption für Steam kopieren</button></div>
+      <p class="small">Dann in Steam: Rechtsklick auf das Spiel bzw. auf den <b>Battle.net</b>-Eintrag → Eigenschaften → <b>Startoptionen</b> → einfügen (Strg+V). Battle.net danach komplett beenden und über Steam neu starten. Das Feld „Zusätzliche Befehlszeilenargumente“ in Battle.net bleibt leer.</p>
       ${copyRow(launch)}
       <p class="small muted">Bei Battle.net reicht der Eintrag am Launcher: Overwatch wird von dort gestartet und übernimmt die Einstellung.</p>
     </details>
     <details><summary class="small"><b>Lutris</b> (Battle.net)</summary>
       <p class="small">Battle.net → Rechtsklick → Konfigurieren → <i>Systemoptionen</i>: „MangoHud aktivieren“ einschalten und unter <i>Umgebungsvariablen</i> hinzufügen – Schlüssel <code>MANGOHUD_CONFIG</code>, Wert:</p>
+      <div class="toolbar" style="margin:6px 0"><button data-copy="MANGOHUD_CONFIG">📋 Schlüssel kopieren</button><button class="primary" data-copy="${esc(envval)}">📋 Wert kopieren</button></div>
       ${copyRow(envval)}
     </details>
     <details><summary class="small"><b>Heroic, Faugus, Bottles</b> (Battle.net)</summary>
       <p class="small">In den Einstellungen des Battle.net-Eintrags (bzw. der Flasche) MangoHud einschalten und die Umgebungsvariable <code>MANGOHUD_CONFIG</code> mit diesem Wert anlegen:</p>
+      <div class="toolbar" style="margin:6px 0"><button data-copy="MANGOHUD_CONFIG">📋 Schlüssel kopieren</button><button class="primary" data-copy="${esc(envval)}">📋 Wert kopieren</button></div>
       ${copyRow(envval)}
     </details>
     <p class="small muted">Lagscope liest neue Logs aus <code>${esc(mh)}</code> jede Minute ein – nur Logs, deren Name „${esc(st.game_patterns.join("“ / „"))}“ enthält. MangoHud schreibt nämlich auch für den Launcher ein Log; das wird ignoriert${st.mangohud_skipped ? ` (zuletzt übersprungen: ${esc(st.mangohud_skipped)})` : ""}. Je nach MangoHud-Version erscheint ein Log erst nach Spielende. Bisher importiert: ${st.mangohud_files} Datei(en), ${st.n_fps_seconds} Sekunden FPS-Daten.</p>
   </div>
   ${!su.tools.xprop && !su.tools.xdotool && !su.tools.kdotool ? '<div class="card"><p class="alert small">Ohne <code>xprop</code> (Paket meist „xorg-xprop“ bzw. „x11-utils“) kann das Fenster im Vordergrund nicht erkannt werden.</p></div>' : ""}
   </div>`;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    // Ausweichlösung, falls der Browser die Zwischenablage-API blockiert
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e2) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
+async function loadMangohud() {
+  clearTimeout(S.mhPoll);
+  const box = $("#mhInstall");
+  if (!box) return;
+  let d;
+  try { d = await api("/api/mangohud"); } catch (e) { box.textContent = "MangoHud-Status nicht abrufbar."; return; }
+  const p = d.plan, j = d.job || {};
+  let h = "";
+  if (p.native || (p.flatpak_steam && p.flatpak_layer)) {
+    h = `MangoHud ist <b>installiert ✓</b>${p.flatpak_steam ? " (für Flatpak-Steam)" : ""}.`;
+  } else if (p.can_install) {
+    h = `MangoHud ist <b>nicht installiert</b>. <button class="primary" id="mhBtn" ${j.running ? "disabled" : ""}>MangoHud installieren</button>
+      <div class="muted">${p.method === "flatpak" ? "Steam ist als Flatpak installiert – es wird die Flatpak-Variante installiert (kein Passwort nötig)." :
+        "Es erscheint die normale Passwortabfrage des Systems. Lagscope sieht das Passwort nicht."}</div>`;
+  } else {
+    h = `MangoHud ist <b>nicht installiert</b>. ${esc(p.hint || "")}${p.command ? copyRow(p.command) : ""}`;
+  }
+  if (j.started) {
+    h += `<div style="margin-top:6px"><b>${j.running ? "Installation läuft …" : j.ok ? "Installation erfolgreich ✓" : "Installation nicht erfolgreich"}</b></div>
+      <pre class="mono" style="max-height:180px;overflow:auto;background:var(--panel2);padding:6px;border-radius:6px;white-space:pre-wrap">${esc(j.log.slice(-2500))}</pre>`;
+  }
+  box.innerHTML = h;
+  $$("[data-copy]", box).forEach((b) => b.onclick = async () => { b.textContent = (await copyText(b.dataset.copy)) ? "✓ Kopiert" : "Strg+C"; });
+  const btn = $("#mhBtn");
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true;
+    const r = await post("/api/setup", { action: "mangohud_install" });
+    if (!r.ok) alert(r.error || "Fehler");
+    loadMangohud();
+  };
+  if (j.running) S.mhPoll = setTimeout(loadMangohud, 1500);
 }
 
 function bindSetup() {
@@ -651,10 +707,15 @@ function bindSetup() {
     if (!r.ok) alert(r.error || "Fehler");
     renderSetup();
   });
-  $$("[data-copy]").forEach((b) => b.onclick = async () => {
-    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Kopiert ✓"; } catch (e) { b.textContent = "Bitte manuell kopieren"; }
-    setTimeout(() => { b.textContent = "Kopieren"; }, 1500);
+  $$("[data-copy]").forEach((b) => {
+    const label = b.textContent;
+    b.onclick = async () => {
+      const ok = await copyText(b.dataset.copy);
+      b.textContent = ok ? "✓ In der Zwischenablage" : "Bitte markieren und mit Strg+C kopieren";
+      setTimeout(() => { b.textContent = label; }, 2000);
+    };
   });
+  if (S.info.status.platform !== "windows") loadMangohud();
   $("#gameSave").onclick = async () => {
     const pats = $("#gamePat").value.split(",").map((x) => x.trim()).filter(Boolean);
     const r = await post("/api/config", { game_patterns: pats });

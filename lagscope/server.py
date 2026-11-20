@@ -258,6 +258,11 @@ class Handler(BaseHTTPRequestHandler):
         t1 = float(q.get("to", now))
         if path == "/api/info":
             return self.send(200, dict(catalogue=metrics.catalogue(), status=status(con, cfg)))
+        if path == "/api/mangohud":
+            if osutil.IS_WIN:
+                return self.send(200, {"plan": None, "job": None})
+            from . import mangohud_setup
+            return self.send(200, {"plan": mangohud_setup.plan(), "job": mangohud_setup.job_status()})
         if path == "/api/status":
             return self.send(200, status(con, cfg))
         if path == "/api/series":

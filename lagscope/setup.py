@@ -146,6 +146,9 @@ def status():
 def apply(action):
     if osutil.IS_WIN:
         return _win_apply(action)
+    if action == "mangohud_install":
+        from . import mangohud_setup
+        return mangohud_setup.start_install()
     if action == "autostart_on":
         _write(AUTOSTART, desktop_entry("Lagscope Logger", "Zeichnet Systemwerte für die Lag-Analyse auf",
                                         ("start",), "lagscope",

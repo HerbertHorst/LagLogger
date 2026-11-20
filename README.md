@@ -112,7 +112,15 @@ Ab- und Anmelden. Fehlt `PresentMon.exe` (z. B. vom Virenscanner entfernt), einf
 
 #### 1. MangoHud installieren
 
+**Am einfachsten über Lagscope:** Tab **Einrichtung** → Karte „3. FPS mitschreiben“ → **„MangoHud installieren“**.
+Lagscope erkennt die Distribution und nimmt die passende Paketverwaltung; das Passwort fragt das System mit seinem
+normalen Fenster ab (Lagscope sieht es nicht). Ist Steam ein Flatpak, wird die Flatpak-Variante installiert und Steam
+darf in den Lagscope-Ordner schreiben – ohne Passwort. Auf unveränderlichen Systemen (Silverblue/Kinoite) und SteamOS
+zeigt Lagscope stattdessen, was zu tun ist.
+
 **Bazzite:** nichts zu tun – MangoHud ist vorinstalliert. Prüfen mit `mangohud --version`.
+
+Oder von Hand im Terminal:
 
 | Distribution | Befehl im Terminal |
 |---|---|
@@ -132,8 +140,9 @@ Die Logs gehören in den Ordner `lagscope-data/mangohud` **neben der `lagscope`-
 `/home/DEINNAME/Programme/lagscope/lagscope-data/mangohud`. Den Pfad komplett ausschreiben (kein `~`), er darf kein
 Komma enthalten. Lagscope muss einmal gestartet worden sein – es legt den Ordner an.
 
-**Am einfachsten:** Lagscope → Tab **Einrichtung** → Karte „3. FPS mitschreiben“ – dort stehen die Zeilen unten
-schon mit dem richtigen Pfad zum Kopieren.
+**Am einfachsten:** Lagscope → Tab **Einrichtung** → Karte „3. FPS mitschreiben“ → **„📋 Startoption für Steam
+kopieren“** (bzw. „Schlüssel kopieren“ / „Wert kopieren“ für Lutris, Heroic, Faugus, Bottles). Damit liegt die Zeile
+mit dem richtigen Pfad in der Zwischenablage – in Steam nur noch mit Strg+V einfügen.
 
 #### 3. MangoHud für Battle.net einschalten
 
