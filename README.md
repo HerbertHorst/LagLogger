@@ -57,7 +57,8 @@ Die Auswertung läuft im normalen Browser. Der Logger läuft weiter, auch wenn d
    - **Autostart aktivieren.**
    - **„Berechtigung für FPS-Messung einrichten“** klicken (öffnet ein Admin-Fenster, fügt dich der
      Windows-Gruppe „Leistungsprotokollbenutzer“ hinzu), danach einmal ab- und wieder anmelden. Ab dann misst
-     Lagscope die FPS automatisch, sobald das Spiel läuft.
+     Lagscope die FPS automatisch, sobald das Spiel läuft – siehe auch
+     [FPS messen – Overwatch über Battle.net oder Steam](#fps-messen--overwatch-über-battlenet-oder-steam).
    - optional **Temperaturen:** [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases)
      als Administrator starten und *Options → Remote Web Server → Run* einschalten. Ohne LibreHardwareMonitor
      fehlen nur Temperaturen und genaue Taktraten – GPU-Last, VRAM, CPU-Last und -Takt liest Lagscope direkt aus
@@ -75,27 +76,108 @@ Die Auswertung läuft im normalen Browser. Der Logger läuft weiter, auch wenn d
      *KDE Plasma* (Bazzite, CachyOS, Kubuntu, SteamOS-Desktop …): Systemeinstellungen → Tastatur → Kurzbefehle →
      Neu → Anwendung. *GNOME*: Einstellungen → Tastatur → Eigene Tastenkombinationen, Befehl aus der Einrichtung
      kopieren.
-   - optional **MangoHud für FPS** – einmalig, je nachdem, wie das Spiel gestartet wird. Den fertigen Text (mit
-     dem richtigen Ordner) zeigt Lagscope in der Einrichtung zum Kopieren an:
-     - **Steam** – auch **Battle.net als Nicht-Steam-Spiel in Steam** (üblich auf Bazzite): Rechtsklick auf das
-       Spiel bzw. den Battle.net-Eintrag → Eigenschaften → Startoptionen:
-       ```
-       MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=/pfad/zu/lagscope-data/mangohud" %command%
-       ```
-       Bei Battle.net reicht der Eintrag am Launcher – Overwatch wird von dort gestartet und übernimmt ihn.
-     - **Lutris** (Battle.net): Konfigurieren → Systemoptionen → „MangoHud aktivieren“, dazu unter
-       Umgebungsvariablen `MANGOHUD_CONFIG` = `autostart_log=1,output_folder=/pfad/zu/lagscope-data/mangohud`.
-     - **Heroic, Faugus, Bottles** (Battle.net): MangoHud in den Einstellungen einschalten und dieselbe
-       Umgebungsvariable `MANGOHUD_CONFIG` anlegen.
-
-     Danach sammelt Lagscope die FPS-Logs automatisch ein (je nach MangoHud-Version nach Spielende). Eingelesen
-     werden nur Logs, deren Name den Spielnamen enthält – MangoHud schreibt bei Battle.net auch ein Log für den
-     Launcher selbst, das wird ignoriert.
+   - optional, aber empfohlen: **MangoHud für FPS** – siehe
+     [FPS messen – Overwatch über Battle.net oder Steam](#fps-messen--overwatch-über-battlenet-oder-steam).
 4. Spielen. Wenn es ruckelt: Tastenkürzel drücken.
 
 **Prüfen, ob alles ankommt:** `python3 lagscope selftest` (Windows: `lagscope.exe selftest` in der
 Eingabeaufforderung) zeigt in wenigen Sekunden, welche Messwerte auf diesem PC verfügbar sind und warum
 andere fehlen.
+
+## FPS messen – Overwatch über Battle.net oder Steam
+
+Mit FPS-Daten reicht beim Spielen die eine Lag-Taste: Lagscope erkennt dann selbst, wann der Lag angefangen hat,
+wann er vorbei war und was „normal“ ist (siehe [Was die Marker bedeuten](#was-die-marker-bedeuten)).
+
+> **Das Feld „Zusätzliche Befehlszeilenargumente“ in der Battle.net-App bleibt leer – unter Windows und Linux.**
+> Was dort steht, bekommt nur `Overwatch.exe` als Startparameter. Die FPS-Messung lässt sich darüber nicht
+> einschalten; fremde Einträge dort können den Spielstart sogar verhindern.
+
+### Windows: PresentMon (liegt bei, keine Installation)
+
+MangoHud gibt es unter Windows nicht – und es wird nicht gebraucht. Lagscope startet **PresentMon** (liegt im
+Download neben `lagscope.exe`) automatisch, sobald Overwatch läuft, egal ob über Battle.net oder Steam.
+
+Einmalig:
+1. Lagscope starten → im Browser Tab **Einrichtung** → **„Berechtigung für FPS-Messung einrichten (Admin)“** →
+   im Admin-Fenster bestätigen.
+2. Einmal **ab- und wieder anmelden** (oder neu starten).
+
+Prüfen: Nach einer Runde steht in der Einrichtung bei PresentMon „läuft“ bzw. „bereit“ und die Zahl
+„Sekunden FPS-Daten“ steigt; im Verlauf erscheint das FPS-Diagramm. Steht dort „keine Rechte“, fehlt noch das
+Ab- und Anmelden. Fehlt `PresentMon.exe` (z. B. vom Virenscanner entfernt), einfach aus dem Download wieder neben
+`lagscope.exe` legen.
+
+### Linux: MangoHud
+
+#### 1. MangoHud installieren
+
+**Bazzite:** nichts zu tun – MangoHud ist vorinstalliert. Prüfen mit `mangohud --version`.
+
+| Distribution | Befehl im Terminal |
+|---|---|
+| Fedora, Nobara | `sudo dnf install mangohud` |
+| Ubuntu, Linux Mint, Pop!_OS, Debian | `sudo apt install mangohud` |
+| Arch, CachyOS, Manjaro, EndeavourOS | `sudo pacman -S mangohud lib32-mangohud` |
+| openSUSE Tumbleweed | `sudo zypper install mangohud` |
+| Steam als **Flatpak** installiert (zusätzlich) | `flatpak install flathub org.freedesktop.Platform.VulkanLayer.MangoHud` |
+
+Bei Flatpak-Steam muss Steam außerdem in den Lagscope-Ordner schreiben dürfen:
+`flatpak override --user --filesystem=/pfad/zu/lagscope com.valvesoftware.Steam` (Pfad anpassen).
+Auf Bazzite ist Steam normal installiert, dort ist das nicht nötig.
+
+#### 2. Den Ordner für die Logs herausfinden
+
+Die Logs gehören in den Ordner `lagscope-data/mangohud` **neben der `lagscope`-Datei**, z. B.
+`/home/DEINNAME/Programme/lagscope/lagscope-data/mangohud`. Den Pfad komplett ausschreiben (kein `~`), er darf kein
+Komma enthalten. Lagscope muss einmal gestartet worden sein – es legt den Ordner an.
+
+**Am einfachsten:** Lagscope → Tab **Einrichtung** → Karte „3. FPS mitschreiben“ – dort stehen die Zeilen unten
+schon mit dem richtigen Pfad zum Kopieren.
+
+#### 3. MangoHud für Battle.net einschalten
+
+Die Einstellung kommt **dorthin, von wo Battle.net gestartet wird** – nicht in Battle.net selbst und nicht an einen
+eigenen Overwatch-Eintrag. Overwatch wird vom Launcher gestartet und übernimmt sie automatisch.
+
+**Battle.net als Nicht-Steam-Spiel in Steam** (üblich auf Bazzite):
+1. Steam → Bibliothek → Rechtsklick auf **Battle.net** → **Eigenschaften** → **Allgemein** → **Startoptionen**:
+   ```
+   MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=/home/DEINNAME/Programme/lagscope/lagscope-data/mangohud" %command%
+   ```
+   Stand dort schon etwas: `MANGOHUD=1 MANGOHUD_CONFIG="…"` davor setzen, `%command%` nur einmal ganz am Ende.
+2. Battle.net **komplett beenden** – auch das Symbol im Infobereich (Rechtsklick → Beenden). Läuft noch eine alte
+   Instanz, greift die Einstellung nicht.
+3. Battle.net **über Steam** starten, dann Overwatch.
+
+**Lutris:**
+1. Rechtsklick auf **Battle.net** → **Konfigurieren** → Reiter **Systemoptionen**.
+2. **„MangoHud aktivieren“** einschalten.
+3. Unter **Umgebungsvariablen** hinzufügen – Schlüssel `MANGOHUD_CONFIG`, Wert (ohne Anführungszeichen):
+   ```
+   autostart_log=1,output_folder=/home/DEINNAME/Programme/lagscope/lagscope-data/mangohud
+   ```
+4. Speichern, Battle.net komplett beenden und neu starten.
+
+**Heroic, Faugus, Bottles:** beim Battle.net-Eintrag bzw. in der Flasche MangoHud einschalten und dieselbe
+Umgebungsvariable `MANGOHUD_CONFIG` wie bei Lutris anlegen.
+
+**Overwatch direkt über Steam** (ohne Battle.net): dieselbe Zeile wie oben in die Startoptionen von Overwatch.
+
+#### 4. Prüfen
+
+- Im Spiel erscheint oben links das **MangoHud-Overlay** mit den FPS → MangoHud ist aktiv.
+- Nach dem Spielen (je nach MangoHud-Version erst nach Spielende) liegt im Ordner eine Datei wie
+  `Overwatch_2026-11-20_20-15-03.csv`. In der Einrichtung steht dann „Bisher importiert: 1 Datei(en)“, im Verlauf
+  erscheint das FPS-Diagramm.
+- Eine zusätzliche `Battle.net_….csv` ist normal (MangoHud läuft auch im Launcher) – Lagscope liest nur Logs ein,
+  deren Name den Spielnamen enthält, und zeigt den Rest als „übersprungen“.
+
+| Problem | Ursache / Lösung |
+|---|---|
+| Kein Overlay im Spiel | Battle.net lief noch im Hintergrund → komplett beenden, neu über Steam/Lutris starten. Bei Flatpak-Steam: MangoHud-Flatpak installiert? |
+| Overlay da, aber keine `.csv` | Pfad falsch, enthält `~` oder ein Komma, oder der Ordner existiert nicht (Lagscope einmal starten) |
+| `.csv` da, aber nicht importiert | Dateiname enthält nicht den Spielnamen → Spielname in Lagscope (Einrichtung → Logger) prüfen |
 
 ## Unterstützte Systeme
 
