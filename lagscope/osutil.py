@@ -109,8 +109,15 @@ def spawn_detached(args, log_path):
     logf = open(log_path, "a")
     kw = dict(stdout=logf, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, close_fds=True)
     if IS_WIN:
-        DETACHED_PROCESS, NEW_GROUP = 0x00000008, 0x00000200
-        kw["creationflags"] = DETACHED_PROCESS | NEW_GROUP | NOWINDOW
+        DETACHED_PROCESS, NEW_GROUP, BREAKAWAY = 0x00000008, 0x00000200, 0x01000000
+        flags = DETACHED_PROCESS | NEW_GROUP | NOWINDOW
+        # Die EXE (PyInstaller) läuft in einem Windows-Job-Objekt. Ohne BREAKAWAY bliebe der Logger an den
+        # startenden Prozess gekoppelt (würde mit ihm beendet bzw. hielte ihn am Leben).
+        try:
+            subprocess.Popen(args, creationflags=flags | BREAKAWAY, **kw)
+            return
+        except OSError:
+            kw["creationflags"] = flags  # Job erlaubt kein Herauslösen
     else:
         kw["start_new_session"] = True
     subprocess.Popen(args, **kw)
