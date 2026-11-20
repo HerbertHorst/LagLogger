@@ -15,7 +15,11 @@ import time
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-exe = sys.argv[1] if len(sys.argv) > 1 else None
+for stream in (sys.stdout, sys.stderr):
+    stream.reconfigure(encoding="utf-8", errors="replace")
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+exe = args[0] if args else None
+detached = "--detached" in sys.argv   # wie beim Doppelklick: "start" startet den Logger losgelöst
 base = [exe] if exe else [sys.executable, os.path.join(ROOT, "lagscope.py")]
 tmp = tempfile.mkdtemp(prefix="lagscope-hk ")
 env = dict(os.environ, LAGSCOPE_DATA=os.path.join(tmp, "data"))
@@ -23,7 +27,11 @@ os.makedirs(env["LAGSCOPE_DATA"])
 with open(os.path.join(env["LAGSCOPE_DATA"], "config.json"), "w") as f:
     json.dump({"interval": 1.0, "web_port": 18799}, f)
 log = open(os.path.join(tmp, "run.log"), "w")
-proc = subprocess.Popen(base + ["run"], env=env, stdout=log, stderr=subprocess.STDOUT)
+if detached:
+    subprocess.run(base + ["start"], env=env, timeout=60)
+    proc = None
+else:
+    proc = subprocess.Popen(base + ["run"], env=env, stdout=log, stderr=subprocess.STDOUT)
 url = "http://127.0.0.1:18799/"
 
 
@@ -86,9 +94,13 @@ chain_ok = st2["n_markers"] > st["n_markers"]
 
 req = urllib.request.Request(url + "api/stop", data=b"{}", method="POST", headers={"Content-Type": "application/json"})
 urllib.request.urlopen(req, timeout=5).read()
-proc.wait(timeout=30)
+if proc:
+    proc.wait(timeout=30)
+else:
+    time.sleep(5)
 log.close()
-text = open(os.path.join(tmp, "run.log"), encoding="utf-8", errors="replace").read()
+logfile = os.path.join(env["LAGSCOPE_DATA"], "lagscope.log") if detached else os.path.join(tmp, "run.log")
+text = open(logfile, encoding="utf-8", errors="replace").read() if os.path.exists(logfile) else "(kein Log)"
 print("---- Log ----\n" + text[-3000:])
 print("ERGEBNIS: Tastendruck->Marker:", key_ok, "| WM_HOTKEY->Marker:", chain_ok)
-sys.exit(0 if chain_ok else 1)
+sys.exit(0 if (chain_ok and key_ok) else 1)
