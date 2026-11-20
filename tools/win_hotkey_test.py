@@ -28,7 +28,32 @@ with open(os.path.join(env["LAGSCOPE_DATA"], "config.json"), "w") as f:
     json.dump({"interval": 1.0, "web_port": 18799}, f)
 log = open(os.path.join(tmp, "run.log"), "w")
 if detached:
-    subprocess.run(base + ["start"], env=env, timeout=60)
+    starter = subprocess.Popen(base + ["start"], env=env)
+    for i in range(30):
+        time.sleep(1)
+        try:
+            alive = bool(status())
+        except Exception:
+            alive = False
+        if i in (3, 10, 29) or starter.poll() is not None:
+            print(f"t={i + 1}s: 'start' beendet={starter.poll() is not None} (code {starter.poll()}), Logger erreichbar={alive}",
+                  flush=True)
+            if i in (3, 29):
+                r = subprocess.run(["powershell", "-NoProfile", "-Command",
+                                    "Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'lagscope*' -or $_.Name -like 'python*' } | "
+                                    "Select-Object ProcessId,ParentProcessId,Name,CommandLine | Format-Table -AutoSize | Out-String -Width 300"],
+                                   capture_output=True, text=True)
+                print(r.stdout, flush=True)
+        if starter.poll() is not None and alive:
+            break
+    if starter.poll() is None:
+        print("'start' hängt – wird beendet", flush=True)
+        starter.kill()
+        time.sleep(3)
+        try:
+            print("Logger nach Beenden von 'start' noch erreichbar:", bool(status()), flush=True)
+        except Exception as e:
+            print("Logger nach Beenden von 'start' NICHT erreichbar:", e, flush=True)
     proc = None
 else:
     proc = subprocess.Popen(base + ["run"], env=env, stdout=log, stderr=subprocess.STDOUT)
