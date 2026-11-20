@@ -42,22 +42,26 @@ jobs:
         run: python lagscope.py selftest
       - name: Rauchtest (Quellcode)
         run: python tools/smoke_test.py
-      - name: EXE bauen
+      - name: EXE bauen (Ordner – startet schneller, ohne Entpacken, seltener Virenscanner-Fehlalarm)
         run: |
           python -m pip install pyinstaller==6.11.1
-          pyinstaller --onefile --noconsole --name lagscope --icon lagscope/web/icon.ico `
+          pyinstaller --onedir --noconsole --name lagscope --icon lagscope/web/icon.ico `
             --add-data "lagscope/web;lagscope/web" `
             --hidden-import lagscope.collector_win --hidden-import lagscope.tray_win `
             lagscope.py
       - name: Rauchtest (EXE)
-        run: python tools/smoke_test.py --exe dist/lagscope.exe
+        run: python tools/smoke_test.py --exe dist/lagscope/lagscope.exe
+      - name: Tastenkürzel (EXE, gestartet wie per Doppelklick, auch mit Spiel im Vordergrund)
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python tools/win_hotkey_test.py dist/lagscope/lagscope.exe --detached
       - name: PresentMon (FPS-Messung, MIT-Lizenz) dazulegen und ZIP packen
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          New-Item -ItemType Directory -Force out/lagscope | Out-Null
-          Copy-Item dist/lagscope.exe out/lagscope/
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item dist/lagscope out/lagscope -Recurse
           Copy-Item packaging/windows/LIESMICH.txt out/lagscope/
           gh release download -R GameTechDev/PresentMon --pattern "PresentMon-*-x64.exe" --dir pm
           $pm = Get-ChildItem pm/*.exe | Select-Object -First 1

@@ -1,6 +1,7 @@
 LAGSCOPE für Windows – findet heraus, warum Spiele plötzlich ruckeln
 
 1. Diesen Ordner irgendwohin kopieren (z. B. C:\Tools\Lagscope).
+   Immer den ganzen Ordner – lagscope.exe braucht den Unterordner "_internal".
 2. Doppelklick auf lagscope.exe.
    Windows zeigt evtl. "Der Computer wurde durch Windows geschützt" (das Programm ist nicht
    signiert): "Weitere Informationen" -> "Trotzdem ausführen".
@@ -9,7 +10,8 @@ LAGSCOPE für Windows – findet heraus, warum Spiele plötzlich ruckeln
 4. Im Browser unter "Einrichtung": Autostart aktivieren und einmalig die Berechtigung
    für die FPS-Messung einrichten (PresentMon).
 5. Beim Spielen: wenn es ruckelt  Strg+Alt+L  drücken (piept zur Bestätigung).
-   Strg+Alt+G = läuft gut, Strg+Alt+K = Lag vorbei.
+   Funktioniert auch im Spiel. Testen: Einrichtung -> "Test: jetzt Strg+Alt+G drücken".
+   Strg+Alt+G = läuft gut, Strg+Alt+K = Lag vorbei (beide optional).
 
 Die Daten liegen im Ordner "lagscope-data" neben lagscope.exe.
 PresentMon.exe (FPS-Messung) stammt von Intel: https://github.com/GameTechDev/PresentMon (MIT-Lizenz).

@@ -28,7 +28,7 @@ automatisch.
 
 | System | Datei | Inhalt |
 |---|---|---|
-| Windows 10/11 | `lagscope-windows.zip` | `lagscope.exe` (kein Python nötig) + `PresentMon.exe` für FPS |
+| Windows 10/11 | `lagscope-windows.zip` | Ordner mit `lagscope.exe` (kein Python nötig, Unterordner `_internal` gehört dazu) + `PresentMon.exe` für FPS |
 | Linux | `lagscope-linux.zip` | `lagscope` (eine Datei, braucht Python 3.8+, ist überall vorinstalliert) + `Lagscope.desktop` |
 
 Die Downloads werden bei jeder Änderung automatisch gebaut und auf echtem Windows bzw. Linux getestet.
@@ -40,7 +40,7 @@ Die Downloads werden bei jeder Änderung automatisch gebaut und auf echtem Windo
 | Starten | Doppelklick auf `lagscope.exe` | Doppelklick auf `Lagscope.desktop` (oder `python3 lagscope`) |
 | Sieht man, dass es läuft? | **Symbol im Infobereich der Taskleiste** (rechts unten, ggf. im ^-Menü). Rechtsklick: Auswertung öffnen · Lag markieren · Beenden | Kein Symbol – Status steht oben rechts in der Auswertung; Menüeintrag „Lagscope“ öffnet sie |
 | Autostart | Einrichtung → „Autostart aktivieren“ | Einrichtung → „Autostart aktivieren“ |
-| Lag markieren | **`Strg+Alt+L`** – eingebaut, funktioniert im Vollbild, piept zur Bestätigung | eigenes Tastenkürzel in KDE/GNOME (siehe unten), Bestätigung als Benachrichtigung |
+| Lag markieren | **`Strg+Alt+L`** – eingebaut, funktioniert auch im Spiel (Vollbild), piept zur Bestätigung. Test: Einrichtung → „jetzt Strg+Alt+G drücken“ | eigenes Tastenkürzel in KDE/GNOME (siehe unten), Bestätigung als Benachrichtigung |
 | „Läuft gut“ / „Lag vorbei“ (optional, mit FPS-Daten unnötig) | `Strg+Alt+G` / `Strg+Alt+K` | eigene Tastenkürzel (optional) |
 | FPS | **automatisch** mit PresentMon (liegt bei) – einmalig Berechtigung erteilen | MangoHud – einmalig eine Startoption in Steam |
 | Temperaturen | optional mit LibreHardwareMonitor | automatisch |
@@ -50,7 +50,8 @@ Die Auswertung läuft im normalen Browser. Der Logger läuft weiter, auch wenn d
 
 ## Einrichtung unter Windows
 
-1. `lagscope-windows.zip` entpacken und den Ordner irgendwohin legen, z. B. `C:\Tools\Lagscope`.
+1. `lagscope-windows.zip` entpacken und den Ordner irgendwohin legen, z. B. `C:\Tools\Lagscope`. Immer den
+   ganzen Ordner verschieben – `lagscope.exe` braucht den Unterordner `_internal`.
 2. **Doppelklick auf `lagscope.exe`.** Weil das Programm nicht signiert ist, zeigt Windows eventuell
    „Der Computer wurde durch Windows geschützt“ → *Weitere Informationen* → *Trotzdem ausführen*.
 3. Im Browser öffnet sich die Auswertung, unten rechts erscheint das Lagscope-Symbol. Im Tab **Einrichtung**:
@@ -64,6 +65,11 @@ Die Auswertung läuft im normalen Browser. Der Logger läuft weiter, auch wenn d
      fehlen nur Temperaturen und genaue Taktraten – GPU-Last, VRAM, CPU-Last und -Takt liest Lagscope direkt aus
      Windows (bei NVIDIA zusätzlich Temperatur und Takt über den Treiber).
 4. Spielen. Wenn es ruckelt: **`Strg+Alt+L`**.
+
+**Tastenkürzel testen:** Einrichtung → Karte „Tastenkürzel“ → jetzt `Strg+Alt+G` drücken. Dort erscheint sofort
+„Zuletzt erkannt: …“. Lagscope erkennt die Kürzel auf zwei Wegen gleichzeitig: über die normalen Windows-Hotkeys
+und über einen Tastatur-Hook (wie Discord Push-to-Talk). Der Hook ist nötig, weil viele Spiele die normalen
+Windows-Hotkeys abschalten, solange sie im Vordergrund sind. Die Tasten werden dabei nur erkannt, nicht abgefangen.
 
 ## Einrichtung unter Linux
 

@@ -51,7 +51,7 @@ def connect_read(path=None):
     if not os.path.exists(path):
         return connect(path)
     con = sqlite3.connect(path, timeout=30, check_same_thread=False)
-    if not con.execute("SELECT 1 FROM sqlite_master WHERE name='samples'").fetchone():
+    if not con.execute("SELECT 1 FROM sqlite_master WHERE name='meta'").fetchone():
         con.close()
         return connect(path)  # Datenbank wird gerade erst angelegt
     return con
