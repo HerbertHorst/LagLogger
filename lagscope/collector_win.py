@@ -570,9 +570,12 @@ class Hotkeys:
         self.events = []
         self.status = {}
         self.lock = threading.Lock()
+        self.thread_id = None
+        self.pressed = 0      # wie oft ein Kürzel angekommen ist (Diagnose)
         threading.Thread(target=self._loop, daemon=True, name="hotkeys").start()
 
     def _loop(self):
+        self.thread_id = k32.GetCurrentThreadId()
         ids = {}
         for i, (kind, combo) in enumerate(self.combos.items(), start=1):
             hk = parse_hotkey(combo or "")
@@ -590,6 +593,7 @@ class Hotkeys:
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
             if msg.message == 0x0312 and msg.wParam in ids:  # WM_HOTKEY
                 with self.lock:
+                    self.pressed += 1
                     self.events.append((time.time(), ids[msg.wParam]))
 
     def drain(self):
@@ -842,4 +846,6 @@ class SystemSampler:
 
     def status_info(self):
         return dict(presentmon=self.pm.status, presentmon_path=self.pm.exe, lhm=self.lhm.ok,
-                    hotkeys=self.hotkeys.status if self.hotkeys else {}, vram_total=self.vram_total)
+                    hotkeys=self.hotkeys.status if self.hotkeys else {}, vram_total=self.vram_total,
+                    hotkey_thread=self.hotkeys.thread_id if self.hotkeys else None,
+                    hotkey_pressed=self.hotkeys.pressed if self.hotkeys else 0)
