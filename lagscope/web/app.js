@@ -597,7 +597,8 @@ function setupWindows(st) {
 function setupLinux(st) {
   const su = st.setup, c = st.commands;
   const mh = st.mangohud_dir;
-  const launch = `MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=${mh}" %command%`;
+  const envval = `autostart_log=1,output_folder=${mh}`;
+  const launch = `MANGOHUD=1 MANGOHUD_CONFIG="${envval}" %command%`;
   return `<div class="grid2">
   <div class="card"><h2>1. Autostart</h2>
     <p>Damit der Logger nach jedem Neustart automatisch mitläuft (im Hintergrund, mit niedriger Priorität).</p>
@@ -621,11 +622,22 @@ function setupLinux(st) {
   </div>
 
   <div class="card"><h2>3. FPS mitschreiben (MangoHud, empfohlen)</h2>
-    <p>Lagscope kann FPS nicht selbst messen. Mit MangoHud werden FPS-Einbrüche zusätzlich <b>automatisch</b> erkannt – auch die, bei denen niemand den Shortcut drückt.</p>
-    <p class="small">MangoHud ist ${su.tools.mangohud ? "<b>installiert</b>" : "<b>nicht gefunden</b> – über die Paketverwaltung installieren (Paket „mangohud“)"}.
-    In Steam: Rechtsklick auf das Spiel → Eigenschaften → Startoptionen:</p>
-    ${copyRow(launch)}
-    <p class="small muted">Lagscope liest neue Logs aus <code>${esc(mh)}</code> jede Minute ein. MangoHud schreibt die Datei je nach Version erst, wenn das Spiel beendet wird. Bisher importiert: ${st.mangohud_files} Datei(en), ${st.n_fps_seconds} Sekunden FPS-Daten.</p>
+    <p>Lagscope kann FPS nicht selbst messen. Mit MangoHud erkennt es Lag-Beginn, Lag-Ende und „normal“ selbst – dann reicht die eine Lag-Taste.</p>
+    <p class="small">MangoHud ist ${su.tools.mangohud ? "<b>installiert</b>" : "<b>nicht gefunden</b> – über die Paketverwaltung installieren (Paket „mangohud“)"}. Einmalig einrichten – je nachdem, wie das Spiel gestartet wird:</p>
+    <details open><summary class="small"><b>Steam</b> – auch Battle.net als Nicht-Steam-Spiel in Steam (üblich auf Bazzite)</summary>
+      <p class="small">Rechtsklick auf das Spiel bzw. auf den Battle.net-Eintrag → Eigenschaften → Startoptionen:</p>
+      ${copyRow(launch)}
+      <p class="small muted">Bei Battle.net reicht der Eintrag am Launcher: Overwatch wird von dort gestartet und übernimmt die Einstellung.</p>
+    </details>
+    <details><summary class="small"><b>Lutris</b> (Battle.net)</summary>
+      <p class="small">Battle.net → Rechtsklick → Konfigurieren → <i>Systemoptionen</i>: „MangoHud aktivieren“ einschalten und unter <i>Umgebungsvariablen</i> hinzufügen – Schlüssel <code>MANGOHUD_CONFIG</code>, Wert:</p>
+      ${copyRow(envval)}
+    </details>
+    <details><summary class="small"><b>Heroic, Faugus, Bottles</b> (Battle.net)</summary>
+      <p class="small">In den Einstellungen des Battle.net-Eintrags (bzw. der Flasche) MangoHud einschalten und die Umgebungsvariable <code>MANGOHUD_CONFIG</code> mit diesem Wert anlegen:</p>
+      ${copyRow(envval)}
+    </details>
+    <p class="small muted">Lagscope liest neue Logs aus <code>${esc(mh)}</code> jede Minute ein – nur Logs, deren Name „${esc(st.game_patterns.join("“ / „"))}“ enthält. MangoHud schreibt nämlich auch für den Launcher ein Log; das wird ignoriert${st.mangohud_skipped ? ` (zuletzt übersprungen: ${esc(st.mangohud_skipped)})` : ""}. Je nach MangoHud-Version erscheint ein Log erst nach Spielende. Bisher importiert: ${st.mangohud_files} Datei(en), ${st.n_fps_seconds} Sekunden FPS-Daten.</p>
   </div>
   ${!su.tools.xprop && !su.tools.xdotool && !su.tools.kdotool ? '<div class="card"><p class="alert small">Ohne <code>xprop</code> (Paket meist „xorg-xprop“ bzw. „x11-utils“) kann das Fenster im Vordergrund nicht erkannt werden.</p></div>' : ""}
   </div>`;

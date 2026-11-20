@@ -257,7 +257,10 @@ class Daemon:
             if now - last_import >= 60:
                 last_import = now
                 try:
-                    mangohud.import_dir(self.con, self.cfg.get("mangohud_dir"), log)
+                    skipped = set()
+                    mangohud.import_dir(self.con, self.cfg.get("mangohud_dir"), log,
+                                        self.cfg["game_patterns"], skipped)
+                    db.set_meta(self.con, "mangohud_skipped", ", ".join(sorted(skipped)[:10]))
                 except Exception as e:
                     log(f"MangoHud-Import: {e!r}")
             if now - last_caps >= 60:

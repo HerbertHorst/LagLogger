@@ -75,12 +75,22 @@ Die Auswertung läuft im normalen Browser. Der Logger läuft weiter, auch wenn d
      *KDE Plasma* (Bazzite, CachyOS, Kubuntu, SteamOS-Desktop …): Systemeinstellungen → Tastatur → Kurzbefehle →
      Neu → Anwendung. *GNOME*: Einstellungen → Tastatur → Eigene Tastenkombinationen, Befehl aus der Einrichtung
      kopieren.
-   - optional **MangoHud für FPS:** einmalig in Steam → Rechtsklick auf das Spiel → Eigenschaften →
-     Startoptionen die Zeile eintragen, die Lagscope in der Einrichtung zum Kopieren anzeigt:
-     ```
-     MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=/pfad/zu/lagscope-data/mangohud" %command%
-     ```
-     Danach sammelt Lagscope die FPS-Logs automatisch ein (je nach MangoHud-Version nach Spielende).
+   - optional **MangoHud für FPS** – einmalig, je nachdem, wie das Spiel gestartet wird. Den fertigen Text (mit
+     dem richtigen Ordner) zeigt Lagscope in der Einrichtung zum Kopieren an:
+     - **Steam** – auch **Battle.net als Nicht-Steam-Spiel in Steam** (üblich auf Bazzite): Rechtsklick auf das
+       Spiel bzw. den Battle.net-Eintrag → Eigenschaften → Startoptionen:
+       ```
+       MANGOHUD=1 MANGOHUD_CONFIG="autostart_log=1,output_folder=/pfad/zu/lagscope-data/mangohud" %command%
+       ```
+       Bei Battle.net reicht der Eintrag am Launcher – Overwatch wird von dort gestartet und übernimmt ihn.
+     - **Lutris** (Battle.net): Konfigurieren → Systemoptionen → „MangoHud aktivieren“, dazu unter
+       Umgebungsvariablen `MANGOHUD_CONFIG` = `autostart_log=1,output_folder=/pfad/zu/lagscope-data/mangohud`.
+     - **Heroic, Faugus, Bottles** (Battle.net): MangoHud in den Einstellungen einschalten und dieselbe
+       Umgebungsvariable `MANGOHUD_CONFIG` anlegen.
+
+     Danach sammelt Lagscope die FPS-Logs automatisch ein (je nach MangoHud-Version nach Spielende). Eingelesen
+     werden nur Logs, deren Name den Spielnamen enthält – MangoHud schreibt bei Battle.net auch ein Log für den
+     Launcher selbst, das wird ignoriert.
 4. Spielen. Wenn es ruckelt: Tastenkürzel drücken.
 
 **Prüfen, ob alles ankommt:** `python3 lagscope selftest` (Windows: `lagscope.exe selftest` in der

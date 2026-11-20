@@ -67,13 +67,28 @@ def parse(path):
     return [(s, round(b[0] / b[1], 1), round(b[2], 2), round(b[3] / b[1], 2)) for s, b in sorted(buckets.items())]
 
 
-def import_dir(con, folder, log=print):
-    """Import new/changed CSVs from folder (and subfolders). Returns number of imported files."""
+def program_name(path):
+    """MangoHud names logs '<Programm>_<JJJJ-MM-TT_hh-mm-ss>.csv' – the program part."""
+    base = os.path.splitext(os.path.basename(path))[0]
+    mt = FNAME_TS.search(base)
+    return (base[:mt.start()] if mt else base).rstrip("_- ") or base
+
+
+def import_dir(con, folder, log=print, game_patterns=None, skipped=None):
+    """Import new/changed CSVs from folder (and subfolders). Returns number of imported files.
+
+    With game_patterns only logs of the game are read: if MangoHud is switched on for a launcher
+    (e.g. Battle.net), it also writes logs for the launcher itself – those must not be mixed in."""
     if not folder or not os.path.isdir(folder):
         return 0
     n = 0
     now = time.time()
     for path in glob.glob(os.path.join(folder, "**", "*.csv"), recursive=True):
+        prog = program_name(path)
+        if game_patterns and not any(p in prog.lower() for p in game_patterns):
+            if skipped is not None:
+                skipped.add(prog)
+            continue
         try:
             st = os.stat(path)
         except OSError:

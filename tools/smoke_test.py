@@ -184,6 +184,20 @@ def main():
             f.write("\n".join(rows))
         data = mangohud.parse(p)
         ok(len(data) > 20 and data[0][1] > 120 and data[-1][1] < 50, f"MangoHud-CSV gelesen ({len(data)} s)")
+        # Battle.net: MangoHud schreibt auch für den Launcher ein Log – das darf nicht eingelesen werden
+        import sqlite3
+        from lagscope import db
+        mh = os.path.join(tmp, "mh")
+        os.makedirs(mh)
+        shutil.copy(p, os.path.join(mh, "Overwatch_2026-01-02_20-00-00.csv"))
+        shutil.copy(p, os.path.join(mh, "Battle.net_2026-01-02_19-55-00.csv"))
+        for f in os.listdir(mh):
+            os.utime(os.path.join(mh, f), (time.time() - 60, time.time() - 60))
+        con = db.connect(os.path.join(tmp, "mh.db"))
+        skipped = set()
+        n = mangohud.import_dir(con, mh, lambda *a: None, ["overwatch"], skipped)
+        ok(n == 1 and skipped == {"Battle.net"}, f"nur Spiel-Logs importiert, Launcher übersprungen ({n}, {skipped})")
+        con.close()
 
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n{'FEHLER: ' + str(len(FAILS)) if FAILS else 'Alles OK'}", flush=True)

@@ -169,6 +169,7 @@ def status(con, cfg):
         n_markers=con.execute("SELECT COUNT(*) FROM markers").fetchone()[0],
         n_fps_seconds=con.execute("SELECT COUNT(*) FROM fps").fetchone()[0],
         mangohud_dir=mh_dir, mangohud_files=con.execute("SELECT COUNT(*) FROM imported").fetchone()[0],
+        mangohud_skipped=db.get_meta(con, "mangohud_skipped", ""),
         interval=cfg["interval"], retention_days=cfg["retention_days"], game_patterns=cfg["game_patterns"],
         commands={k: config.launch_command(*v) for k, v in (
             ("mark", ("mark",)), ("good", ("mark", "--good")), ("end", ("mark", "--end")),
