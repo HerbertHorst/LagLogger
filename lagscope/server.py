@@ -96,6 +96,14 @@ def series(con, cfg, t0, t1, keys, points):
                 r = by_b.get(int((t - int(t0)) // istep))
                 v = None if r is None else (r[1] if k == "fps" else r[2])
                 col.append(None if v is None else round(v, 1))
+            # einzelne fehlende Sekunden überbrücken (Anzeige), echte Pausen bleiben Lücken
+            last = None
+            for i, v in enumerate(col):
+                if v is not None:
+                    if last is not None and 1 < i - last <= 3 and step <= 10:
+                        for j in range(last + 1, i):
+                            col[j] = col[last]
+                    last = i
             cols[k] = col
     present = [k for k in keys if any(v is not None for v in cols.get(k, []))]
     return dict(t=[round(t, 1) for t in out_t], series={k: cols[k] for k in present}, res=res, step=step,
@@ -171,6 +179,7 @@ def status(con, cfg):
         mangohud_dir=mh_dir, mangohud_files=con.execute("SELECT COUNT(*) FROM imported").fetchone()[0],
         mangohud_skipped=db.get_meta(con, "mangohud_skipped", ""),
         interval=cfg["interval"], retention_days=cfg["retention_days"], game_patterns=cfg["game_patterns"],
+        lag_fps_below=analysis.abs_threshold(cfg),
         commands={k: config.launch_command(*v) for k, v in (
             ("mark", ("mark",)), ("good", ("mark", "--good")), ("end", ("mark", "--end")),
             ("start", ("start",)), ("open", ("open",)), ("stop", ("stop",)))},
@@ -257,7 +266,8 @@ class Handler(BaseHTTPRequestHandler):
         t0 = float(q.get("from", now - 3600))
         t1 = float(q.get("to", now))
         if path == "/api/info":
-            return self.send(200, dict(catalogue=metrics.catalogue(), status=status(con, cfg)))
+            from . import __version__
+            return self.send(200, dict(catalogue=metrics.catalogue(), status=status(con, cfg), version=__version__))
         if path == "/api/mangohud":
             if osutil.IS_WIN:
                 return self.send(200, {"plan": None, "job": None})
@@ -270,7 +280,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, series(con, cfg, t0, t1, keys, int(q.get("points", 1000))))
         if path == "/api/timeline":
             sess = db.sessions(con, t0, t1)
-            return self.send(200, dict(sessions=sess, markers=db.markers(con, t0, t1)))
+            ms = db.markers(con, t0, t1)
+            drops = []
+            for d in analysis.detect_fps_drops(con, cfg, sess, with_ignored=True):
+                if d["end"] < t0 or d["start"] > t1:
+                    continue
+                confirmed = any(m["kind"] == "lag" and d["start"] - 60 <= m["ts"] <= d["end"] + 60 for m in ms)
+                drops.append(dict(start=d["start"], end=d["end"], fps_min=d["fps_min"], fps_avg=d["fps_avg"],
+                                  threshold=d["threshold"], normal=round(d["median_fps"]), ignored=d["ignored"],
+                                  confirmed=confirmed))
+            return self.send(200, dict(sessions=sess, markers=ms, drops=drops,
+                                       lag_fps_below=analysis.abs_threshold(cfg)))
         if path == "/api/overview":
             days = con.execute(
                 "SELECT date(ts, 'unixepoch', 'localtime') d, COUNT(*), MIN(ts), MAX(ts) FROM minutes GROUP BY d ORDER BY d DESC LIMIT 60"
@@ -357,12 +377,36 @@ class Handler(BaseHTTPRequestHandler):
                 con.close()
                 return self.send(200, {"ok": True})
             if path == "/api/config":
-                pats = [str(x).strip().lower() for x in body.get("game_patterns", []) if str(x).strip()][:10]
-                if not pats:
-                    return self.send(400, {"error": "mindestens ein Spielname"})
-                self.cfg["game_patterns"][:] = pats   # gilt sofort (der Logger nutzt dieselbe Liste)
-                config.save({"game_patterns": pats})
-                return self.send(200, {"ok": True, "game_patterns": pats})
+                changes = {}
+                if "game_patterns" in body:
+                    pats = [str(x).strip().lower() for x in body.get("game_patterns", []) if str(x).strip()][:10]
+                    if not pats:
+                        return self.send(400, {"error": "mindestens ein Spielname"})
+                    self.cfg["game_patterns"][:] = pats   # gilt sofort (der Logger nutzt dieselbe Liste)
+                    changes["game_patterns"] = pats
+                if "lag_fps_below" in body:
+                    try:
+                        v = float(body.get("lag_fps_below") or 0)
+                    except (TypeError, ValueError):
+                        return self.send(400, {"error": "Zahl erwartet"})
+                    if not 0 <= v <= 1000:
+                        return self.send(400, {"error": "0–1000"})
+                    self.cfg["lag_fps_below"] = v
+                    changes["lag_fps_below"] = v
+                    _analysis["result"] = None  # Analyse mit neuer Grenze neu rechnen
+                config.save(changes)
+                return self.send(200, {"ok": True, **changes})
+            if path == "/api/drop":
+                ts = int(float(body.get("start")))
+                con = db.connect()
+                if body.get("ignore"):
+                    con.execute("INSERT OR REPLACE INTO ignored_drops(ts) VALUES (?)", (ts,))
+                else:
+                    con.execute("DELETE FROM ignored_drops WHERE ts BETWEEN ? AND ?", (ts - 30, ts + 30))
+                con.commit()
+                con.close()
+                _analysis["result"] = None
+                return self.send(200, {"ok": True})
             if path == "/api/setup":
                 return self.send(200, setup.apply(body.get("action", "")))
             if path == "/api/stop":

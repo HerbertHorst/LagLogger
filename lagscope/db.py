@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE TABLE IF NOT EXISTS fps (ts INTEGER PRIMARY KEY, fps REAL, ft_max REAL, ft_avg REAL);
 CREATE TABLE IF NOT EXISTS imported (path TEXT PRIMARY KEY, mtime REAL, size INTEGER);
+-- automatisch erkannte FPS-Einbrüche, die der Nutzer als "kein Lag" markiert hat (Startsekunde)
+CREATE TABLE IF NOT EXISTS ignored_drops (ts INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 

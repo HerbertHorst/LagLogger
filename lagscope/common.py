@@ -103,3 +103,33 @@ class NvidiaGpu:
                     state["gpu_throttle_reasons"] = parts[8]
             except Exception:
                 pass
+
+
+class FrameClock:
+    """Assigns each frame of a buffered frame log (PresentMon) to the second in which it was rendered.
+
+    PresentMon writes its CSV in bursts every few seconds. Taking the arrival time would put a whole burst into
+    one second and leave the seconds in between empty (gaps in the FPS chart). Instead: anchor each swapchain to
+    the wall clock once and then follow PresentMon's own time (TimeInSeconds) or the sum of the frame times.
+    """
+
+    def __init__(self, max_drift=30.0):
+        self.anchor = {}
+        self.max_drift = max_drift
+
+    def stamp(self, swapchain, ft_ms, t=None, now=None):
+        now = time.time() if now is None else now
+        a = self.anchor.get(swapchain)
+        if a is None:
+            a = self.anchor[swapchain] = {"wall": now, "t0": t, "cum": 0.0}
+        else:
+            a["cum"] += ft_ms / 1000.0
+        if t is not None and a["t0"] is not None:
+            ts = a["wall"] + (t - a["t0"])
+        else:
+            ts = a["wall"] + a["cum"]
+        if abs(ts - now) > self.max_drift:  # Uhr gesprungen oder sehr lange Pause: neu verankern
+            self.anchor[swapchain] = {"wall": now, "t0": t, "cum": 0.0}
+            ts = now
+        return ts
+

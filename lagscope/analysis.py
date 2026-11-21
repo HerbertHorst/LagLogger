@@ -73,11 +73,30 @@ class Loader:
         return self.cache[key]
 
 
-def detect_fps_drops(con, cfg, sessions):
-    """Automatic incidents from MangoHud data: FPS clearly below the session's median for a while."""
+def abs_threshold(cfg):
+    """Fixed 'FPS below = lag' limit from the settings, or 0 (= relative to the session's normal FPS)."""
+    try:
+        return max(0.0, float(cfg.get("lag_fps_below") or 0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def ignored_drops(con):
+    try:
+        return [r[0] for r in con.execute("SELECT ts FROM ignored_drops")]
+    except Exception:
+        return []
+
+
+def detect_fps_drops(con, cfg, sessions, with_ignored=False):
+    """Automatic incidents from FPS data (PresentMon/MangoHud): FPS clearly too low for a while.
+
+    Limit: the fixed 'lag_fps_below' if set, otherwise a share of the session's normal FPS."""
     out = []
     ratio = float(cfg.get("auto_fps_ratio", 0.6))
     min_s = int(cfg.get("auto_min_seconds", 10))
+    fixed = abs_threshold(cfg)
+    ign = ignored_drops(con)
     for s in sessions:
         end = s["end"] or time.time()
         rows = db.load_fps(con, s["start"] + 60, end)
@@ -87,7 +106,20 @@ def detect_fps_drops(con, cfg, sessions):
         med = _pct(fps, FPS_REF_Q)  # Bezug "normale FPS" (siehe FPS_REF_Q)
         if not med or med < 10:
             continue
-        thr = med * ratio
+        thr = fixed or med * ratio
+        by_sec = {r[0]: r[1] for r in rows}
+
+        def finish(a, b):
+            if b - a < min_s:
+                return
+            vals = [by_sec[x] for x in range(int(a), int(b) + 1) if x in by_sec]
+            d = dict(start=a, end=b, session=s, median_fps=med, threshold=round(thr, 1),
+                     fps_min=round(min(vals), 1) if vals else None,
+                     fps_avg=round(sum(vals) / len(vals), 1) if vals else None,
+                     ignored=any(a - 30 <= x <= b + 30 for x in ign))
+            if with_ignored or not d["ignored"]:
+                out.append(d)
+
         win, run_start, last_bad = [], None, None
         for i, (ts, f, _, _) in enumerate(rows):
             win.append(f)
@@ -99,11 +131,10 @@ def detect_fps_drops(con, cfg, sessions):
                     run_start = ts
                 last_bad = ts
             elif run_start is not None and ts - last_bad > 3:
-                if last_bad - run_start >= min_s:
-                    out.append(dict(start=run_start, end=last_bad, session=s, median_fps=med))
+                finish(run_start, last_bad)
                 run_start = None
-        if run_start is not None and last_bad - run_start >= min_s:
-            out.append(dict(start=run_start, end=last_bad, session=s, median_fps=med))
+        if run_start is not None:
+            finish(run_start, last_bad)
     return out
 
 
@@ -114,10 +145,14 @@ FPS_NORMAL = 0.9    # für die Vergleichsbasis etwas strenger
 class SessionFps:
     """Per-second FPS of one game session (from MangoHud or PresentMon)."""
 
-    def __init__(self, rows, start):
+    def __init__(self, rows, start, fixed=0.0):
         self.fps = {r[0]: r[1] for r in rows}
         vals = [r[1] for r in rows if r[0] >= start + 60] or [r[1] for r in rows]
         self.ref = _pct(vals, FPS_REF_Q) or 0
+        # Grenze "normal": feste Grenze aus den Einstellungen oder 85 % der normalen FPS der Sitzung
+        self.fixed = fixed
+        self.ok_thr = fixed or FPS_OK * self.ref
+        self.normal_thr = fixed or FPS_NORMAL * self.ref
 
     def at(self, ts):
         """FPS around a timestamp (average of the two seconds before it), or None."""
@@ -130,14 +165,14 @@ class SessionFps:
 
     def ok(self, sec):
         r = self.rolling(sec)
-        return None if r is None else r >= FPS_OK * self.ref
+        return None if r is None else r >= self.ok_thr
 
     def lag_span(self, t, lo, hi):
         """Around a lag marker at t: when did the FPS drop start and when were they normal again?
 
         Returns (start, end) or None if the FPS were not low around t."""
         near = [self.fps[x] for x in range(int(t) - 20, int(t) + 21) if x in self.fps]
-        if len(near) < 10 or sum(near) / len(near) >= FPS_OK * self.ref:
+        if len(near) < 10 or sum(near) / len(near) >= self.ok_thr:
             return None
         start, run = None, 0
         for sec in range(int(t), int(max(lo, t - 600)), -1):   # rückwärts: Beginn des Einbruchs (max. 10 min)
@@ -159,12 +194,13 @@ class SessionFps:
         return (start if start is not None else max(lo, t - 600)), (end if end is not None else min(hi, t + 1800))
 
 
-def session_fps(con, s, cache):
+def session_fps(con, s, cache, cfg=None):
     if s is None:
         return None
     if s["id"] not in cache:
         rows = db.load_fps(con, s["start"], s["end"] or time.time())
-        cache[s["id"]] = SessionFps(rows, s["start"]) if len(rows) >= 120 else None
+        fixed = abs_threshold(cfg or {})
+        cache[s["id"]] = SessionFps(rows, s["start"], fixed) if len(rows) >= 120 else None
     return cache[s["id"]]
 
 
@@ -193,7 +229,7 @@ def build_incidents(con, cfg, sessions, include_auto=True, fps_cache=None):
         if s and s["end"]:
             end = min(end, s["end"])
         start, by_fps = t - before, False
-        sf = session_fps(con, s, fps_cache)
+        sf = session_fps(con, s, fps_cache, cfg)
         if sf:
             hi = min([x for x in (s["end"], nxt[0] if nxt else None) if x] or [time.time()])
             span = sf.lag_span(t, s["start"] + 60, hi)
@@ -238,7 +274,7 @@ def fps_baseline(loader, inc, incidents, sessions, fps_cache, con, want=400):
     def good_times(s, sf):
         windows = [(i["start"] - 60, i["end"] + 60) for i in incidents if i["session"] is s]
         return lambda ts: (ts >= s["start"] + 90 and not any(a <= ts <= b for a, b in windows)
-                           and (sf.at(ts) or 0) >= FPS_NORMAL * sf.ref)
+                           and (sf.at(ts) or 0) >= sf.normal_thr)
     order = [inc["session"]] + [x for x in reversed(sessions) if x is not inc["session"]]
     base, snaps, used = [], [], 0
     for s in order:

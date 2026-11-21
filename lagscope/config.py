@@ -94,6 +94,8 @@ DEFAULTS = {
     "lag_after": 60,
     # Automatische Lag-Erkennung aus MangoHud-FPS: FPS unter diesem Anteil des Sitzungs-Medians
     "auto_fps_ratio": 0.6,
+    # Feste Grenze: FPS darunter = Lag (0 = automatisch, relativ zu den normalen FPS der Sitzung)
+    "lag_fps_below": 0,
     "auto_min_seconds": 10,
     # Nur Windows: eingebaute Tastenkürzel (Strg+Alt+…). Möglich: ctrl, alt, shift, win + Buchstabe/Ziffer/F1–F24
     "hotkeys": {"lag": "ctrl+alt+l", "good": "ctrl+alt+g", "end": "ctrl+alt+k"},

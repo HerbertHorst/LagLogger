@@ -81,6 +81,8 @@ tr.click { cursor: pointer; } tr.click:hover td { background: var(--panel2); }
 .kv div:nth-child(odd) { color: var(--muted); }
 .ev-kernel { color: var(--warn); }
 .u-legend { font-size: 12px; }
+.chip.drop { border-color: var(--auto); }
+.chip.ignored { opacity: .5; text-decoration: line-through; }
 .u-legend .u-marker { width: 10px; height: 3px; }
 .u-select { background: rgba(108,156,255,.2); }
 .loading { opacity: .55; transition: opacity .2s; }

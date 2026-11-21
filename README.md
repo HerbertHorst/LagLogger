@@ -194,6 +194,34 @@ Umgebungsvariable `MANGOHUD_CONFIG` wie bei Lutris anlegen.
 | Overlay da, aber keine `.csv` | Pfad falsch, enthält `~` oder ein Komma, oder der Ordner existiert nicht (Lagscope einmal starten) |
 | `.csv` da, aber nicht importiert | Dateiname enthält nicht den Spielnamen → Spielname in Lagscope (Einrichtung → Logger) prüfen |
 
+## Aktualisieren
+
+**Deine Daten bleiben erhalten.** Sie liegen im Ordner `lagscope-data` neben dem Programm – der ist nicht im
+Download enthalten und wird beim Aktualisieren nicht angefasst, solange du das Programm im **selben Ordner**
+ersetzt. Gibt es eine neue Version, zeigt Lagscope das oben in der Auswertung an („⬆ Neue Version … verfügbar“).
+
+**Windows**
+1. Lagscope beenden: Rechtsklick auf das Lagscope-Symbol unten rechts → *Lagscope beenden*
+   (oder Einrichtung → *Logger beenden*).
+2. Die neue [`lagscope-windows.zip`](https://github.com/HerbertHorst/LagLogger/releases/latest) herunterladen und
+   öffnen.
+3. Den **Inhalt** des Ordners `lagscope` aus dem ZIP (`lagscope.exe`, `_internal`, `PresentMon.exe`, …) in deinen
+   bisherigen Lagscope-Ordner kopieren und **„Dateien im Ziel ersetzen“** wählen. Der Ordner `lagscope-data` bleibt
+   dabei, wie er ist.
+4. `lagscope.exe` starten. Autostart und Einstellungen gelten weiter (gleicher Ordner).
+
+**Linux**
+1. Lagscope beenden: Einrichtung → *Logger beenden* (oder `python3 lagscope stop`).
+2. Die neue [`lagscope-linux.zip`](https://github.com/HerbertHorst/LagLogger/releases/latest) entpacken und die
+   Dateien `lagscope` und `Lagscope.desktop` in den bisherigen Ordner kopieren (ersetzen).
+3. Wieder starten (Doppelklick auf `Lagscope.desktop`).
+
+**Lieber in einen neuen Ordner?** Dann den alten Ordner `lagscope-data` in den neuen Ordner kopieren (sonst fängt
+Lagscope dort mit leeren Daten an) und in der Einrichtung einmal *Autostart neu setzen*.
+
+Von Version 1.3 oder älter (Windows): Damals war `lagscope.exe` eine einzelne Datei, jetzt gehört der Unterordner
+`_internal` dazu – einfach wie oben den ganzen Inhalt des ZIP-Ordners kopieren.
+
 ## Unterstützte Systeme
 
 ### Linux
@@ -251,6 +279,12 @@ PresentMon mit laufendem Spiel – das ist der Teil, den man einmal von Hand aus
 | **Lag** | „Jetzt laggt es.“ Gespeichert werden zusätzlich das Fenster im Vordergrund und die komplette Prozessliste. |
 | **Läuft gut** (optional) | „Jetzt ist alles normal.“ Zusätzlicher Vergleichspunkt – mit FPS-Daten nicht nötig. |
 | **Lag vorbei** (optional) | Beendet das Lag-Zeitfenster – mit FPS-Daten nicht nötig. |
+
+**Ohne Tastendruck markieren:** Im Verlauf sind automatisch erkannte FPS-Einbrüche **orange** hinterlegt und
+stehen in der Markerleiste („FPS-Einbruch …“). Ein Klick darauf zeigt Details mit **„Als Lag bestätigen“** oder
+**„Ignorieren“** (z. B. für Ladebildschirme). Ab wann ein Einbruch zählt, stellst du oben im Verlauf bzw. in der
+Analyse ein: **„Lag, wenn FPS unter [60]“** – leer bedeutet automatisch (deutlich unter den normalen FPS der Sitzung).
+Außerdem kannst du jederzeit in ein Diagramm klicken → **„Hier war Lag“**.
 
 **Mit FPS-Daten** (PresentMon unter Windows, MangoHud unter Linux) erkennt Lagscope selbst:
 - **wann der Lag angefangen hat** – auch wenn du erst später drückst (bis zu 10 min zurück),
@@ -345,6 +379,7 @@ Der Spielname lässt sich auch direkt in der Oberfläche (Einrichtung → Logger
 | `lag_before` / `lag_after` | 90 / 60 | Sekunden vor/nach einem Lag-Marker, die ausgewertet werden |
 | `auto_fps_ratio` | 0.6 | FPS-Einbruch = FPS unter 60 % des Sitzungs-Medians … |
 | `auto_min_seconds` | 10 | … für mindestens so viele Sekunden |
+| `lag_fps_below` | 0 | feste Grenze: FPS darunter = Lag (0 = automatisch; auch in der Oberfläche einstellbar) |
 | `mangohud_dir` | `""` | Linux: Ordner der MangoHud-Logs (leer = `lagscope-data/mangohud`) |
 | `hotkeys` | `ctrl+alt+l` / `g` / `k` | Windows: Tastenkürzel für Lag / läuft gut / Lag vorbei (z. B. `"ctrl+alt+f9"`) |
 | `presentmon_path` | `""` | Windows: Pfad zu PresentMon (leer = neben `lagscope.exe`) |

@@ -22,7 +22,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from . import config
-from .common import NvidiaGpu, ProcInfo
+from .common import FrameClock, NvidiaGpu, ProcInfo
 from .osutil import popen_kwargs
 
 ntdll = ctypes.WinDLL("ntdll")
@@ -500,6 +500,8 @@ class PresentMon:
                     ft_i = next((idx[c] for c in ("MsBetweenPresents", "MsBetweenAppStart", "FrameTime",
                                                   "MsBetweenDisplayChange") if c in idx), None)
                     sc_i = idx.get("SwapChainAddress")
+                    t_i = idx.get("TimeInSeconds")
+                    clock = FrameClock()
                     if ft_i is None:
                         self.status = "unbekanntes Ausgabeformat"
                         break
@@ -514,8 +516,16 @@ class PresentMon:
                 continue
             if ft <= 0 or ft > 5000:
                 continue
-            sec = int(time.time())
             sc = f[sc_i] if sc_i is not None and sc_i < len(f) else ""
+            # PresentMon gibt gepuffert aus – Zeit aus PresentMon selbst statt Ankunftszeit (sonst Lücken)
+            t = None
+            if t_i is not None and t_i < len(f):
+                try:
+                    t = float(f[t_i])
+                except ValueError:
+                    t = None
+            ts = clock.stamp(sc, ft, t)
+            sec = int(ts)
             with self.lock:
                 self.buckets.setdefault(sec, {}).setdefault(sc, []).append(ft)
         proc.wait()
@@ -533,7 +543,8 @@ class PresentMon:
         now = int(time.time())
         out = []
         with self.lock:
-            for sec in sorted(s for s in self.buckets if s < now - 1):
+            # erst abschließen, wenn auch gepufferte Frames dieser Sekunde sicher angekommen sind
+            for sec in sorted(s for s in self.buckets if s < now - 15):
                 chains = self.buckets.pop(sec)
                 fts = max(chains.values(), key=len)  # Haupt-Swapchain (Overlays ignorieren)
                 avg = sum(fts) / len(fts)

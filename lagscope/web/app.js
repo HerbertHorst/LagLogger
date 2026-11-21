@@ -163,11 +163,65 @@ async function loadTimeline() {
   }
 }
 
+// ------------------------------------------------------------------ FPS-Grenze / erkannte Einbrüche
+function renderThreshold() {
+  const v = S.info && S.info.status ? S.info.status.lag_fps_below : 0;
+  for (const el of $$(".thrBar")) {
+    el.innerHTML = `Lag, wenn FPS unter <input class="thrIn" type="number" min="0" max="1000" step="5" placeholder="auto" value="${v ? v : ""}" style="width:72px">
+      <button class="thrSave">Übernehmen</button>
+      <span class="muted">${v ? `(fest: unter ${v} FPS = Lag)` : "(leer = automatisch: deutlich unter den normalen FPS der Sitzung)"}</span>`;
+    $(".thrSave", el).onclick = async () => {
+      const val = $(".thrIn", el).value.trim();
+      const r = await post("/api/config", { lag_fps_below: val === "" ? 0 : Number(val) });
+      if (!r.ok) { alert(r.error || "Fehler"); return; }
+      S.info.status.lag_fps_below = r.lag_fps_below;
+      renderThreshold();
+      loadTimeline();
+      if ($("#tab-analysis").classList.contains("on")) loadAnalysis(true);
+    };
+  }
+}
+
+function dropLabel(d) {
+  return `FPS-Einbruch · ${fmtTime(d.start, span() > 80000)} · ${fmtDur(d.end - d.start)} · min ${d.fps_min != null ? Math.round(d.fps_min) : "?"} FPS`;
+}
+
+function showDrop(d, zoom) {
+  if (zoom) setRange(d.start - 180, d.end + 180);
+  S.selTs = d.start;
+  const el = $("#detail");
+  const state = d.ignored ? "ignoriert – zählt nicht für die Analyse" : d.confirmed ? "als Lag bestätigt ✓" : "wird automatisch in der Analyse berücksichtigt";
+  el.innerHTML = `<h3 style="margin:0 0 4px"><span class="pill auto">FPS-Einbruch</span> ${fmtTime(d.start)}</h3>
+    <div class="kv small">
+      <div>Dauer</div><div>${fmtDur(d.end - d.start)} (bis ${fmtTime(d.end, false)})</div>
+      <div>FPS</div><div>Ø ${d.fps_avg ?? "?"} · min ${d.fps_min ?? "?"} (normal ~${d.normal})</div>
+      <div>Grenze</div><div>unter ${d.threshold} FPS</div>
+      <div>Status</div><div>${state}</div>
+    </div>
+    <div class="toolbar" style="margin-top:8px">
+      ${d.confirmed ? "" : '<button class="danger" id="dConfirm">Als Lag bestätigen</button>'}
+      ${d.ignored ? '<button id="dUnignore">Doch berücksichtigen</button>' : '<button id="dIgnore">Ignorieren (kein echter Lag)</button>'}
+    </div>
+    <p class="small muted">„Bestätigen“ setzt einen Lag-Marker mit Prozessliste – wie die Lag-Taste. „Ignorieren“ ist für Ladebildschirme, Menüs, Alt+Tab usw.</p>`;
+  if ($("#dConfirm")) $("#dConfirm").onclick = async () => { await post("/api/marker", { kind: "lag", ts: d.start + 5, note: "aus FPS-Einbruch bestätigt" }); loadTimeline(); };
+  if ($("#dIgnore")) $("#dIgnore").onclick = async () => { await post("/api/drop", { start: d.start, ignore: true }); loadTimeline(); el.innerHTML = '<div class="empty">Einbruch wird ignoriert.</div>'; };
+  if ($("#dUnignore")) $("#dUnignore").onclick = async () => { await post("/api/drop", { start: d.start, ignore: false }); loadTimeline(); el.innerHTML = '<div class="empty">Einbruch wird wieder berücksichtigt.</div>'; };
+}
+
 function renderMarkerChips() {
   const box = $("#markerChips");
   const ms = S.timeline.markers.filter((m) => m.ts >= S.from && m.ts <= S.to);
-  if (!ms.length) { box.innerHTML = '<span class="small muted">Keine Marker in diesem Zeitraum.</span>'; return; }
+  const drops = (S.timeline.drops || []).filter((d) => d.end >= S.from && d.start <= S.to);
+  if (!ms.length && !drops.length) { box.innerHTML = '<span class="small muted">Keine Marker und keine FPS-Einbrüche in diesem Zeitraum.</span>'; return; }
   box.innerHTML = "";
+  for (const d of drops.slice(-40)) {
+    const c = document.createElement("span");
+    c.className = "chip drop" + (d.ignored ? " ignored" : "");
+    c.innerHTML = `<i style="background:var(--auto)"></i>${esc(dropLabel(d))}${d.confirmed ? " ✓" : ""}`;
+    c.title = d.ignored ? "ignoriert" : d.confirmed ? "als Lag bestätigt" : "automatisch erkannt – klicken zum Bestätigen oder Ignorieren";
+    c.onclick = () => showDrop(d, true);
+    box.appendChild(c);
+  }
   for (const m of ms.slice(-40)) {
     const c = document.createElement("span");
     c.className = "chip";
@@ -205,6 +259,14 @@ function overlayPlugin() {
           const x0 = u.valToPos(Math.max(s.start, u.scales.x.min), "x", true);
           const x1 = u.valToPos(Math.min(s.end || Date.now() / 1000, u.scales.x.max), "x", true);
           if (x1 > x0) ctx.fillRect(x0, top, x1 - x0, height);
+        }
+        // automatisch erkannte FPS-Einbrüche (orange, ignorierte grau)
+        for (const d of S.timeline.drops || []) {
+          if (d.end < u.scales.x.min || d.start > u.scales.x.max) continue;
+          const x0 = u.valToPos(Math.max(d.start, u.scales.x.min), "x", true);
+          const x1 = Math.max(x0 + 2, u.valToPos(Math.min(d.end, u.scales.x.max), "x", true));
+          ctx.fillStyle = d.ignored ? "rgba(140,140,140,.15)" : "rgba(255,160,40,.22)";
+          ctx.fillRect(x0, top, x1 - x0, height);
         }
         ctx.restore();
       },
@@ -746,6 +808,37 @@ function bindSetup() {
   };
 }
 
+// ------------------------------------------------------------------ Hinweis auf neue Version
+function newer(a, b) {
+  const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+}
+
+async function checkUpdate(current) {
+  // höchstens alle 12 h bei GitHub nachfragen (nur die öffentliche Versionsnummer)
+  let latest = null;
+  try {
+    const c = JSON.parse(localStorage.getItem("lagscope.update") || "null");
+    if (c && Date.now() - c.t < 12 * 3600 * 1000) latest = c.v;
+  } catch (e) { /* ignore */ }
+  if (!latest) {
+    try {
+      const r = await fetch("https://api.github.com/repos/HerbertHorst/LagLogger/releases/latest");
+      const j = await r.json();
+      const m = /(\d+\.\d+\.\d+)/.exec(j.name || "");
+      latest = m ? m[1] : null;
+      try { localStorage.setItem("lagscope.update", JSON.stringify({ t: Date.now(), v: latest })); } catch (e) { /* ignore */ }
+    } catch (e) { return; }
+  }
+  if (latest && newer(latest, current)) {
+    const a = $("#updateNote");
+    a.href = "https://github.com/HerbertHorst/LagLogger#aktualisieren";
+    a.textContent = `⬆ Neue Version ${latest} verfügbar – so aktualisierst du (Daten bleiben erhalten)`;
+    a.style.display = "";
+  }
+}
+
 // ------------------------------------------------------------------ tabs / init
 function switchTab(name) {
   $$("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
@@ -774,6 +867,8 @@ async function init() {
   for (const m of info.catalogue.metrics) S.metrics[m.key] = m;
   initGroups();
   initToolbar();
+  renderThreshold();
+  checkUpdate(info.version);
   refreshStatus();
   setInterval(() => { if (!document.hidden) refreshStatus(); }, 15000);
   const ov = await loadOverview();

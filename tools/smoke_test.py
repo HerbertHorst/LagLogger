@@ -152,6 +152,33 @@ def main():
     if FAILS or "-v" in sys.argv:
         print("---- Logger-Log ----\n" + text[-3000:])
 
+    # ---- 4a. Feste FPS-Grenze, ignorierte Einbrüche, FPS-Zeitzuordnung (PresentMon gepuffert)
+    if not exe:
+        sys.path.insert(0, ROOT)
+        from lagscope import analysis, db
+        from lagscope.common import FrameClock
+        con = db.connect(os.path.join(tmp, "demo", "lagscope.db"))
+        sess = db.sessions(con)
+        auto = analysis.detect_fps_drops(con, {}, sess)
+        fixed = analysis.detect_fps_drops(con, {"lag_fps_below": 60}, sess)
+        ok(len(fixed) >= 4 and all(d["threshold"] == 60 for d in fixed), f"feste Grenze 60 FPS: {len(fixed)} Einbrüche erkannt")
+        ok(len(analysis.detect_fps_drops(con, {"lag_fps_below": 20}, sess)) == 0, "Grenze 20 FPS: keine Einbrüche (Lag liegt bei ~40)")
+        con.execute("INSERT INTO ignored_drops(ts) VALUES (?)", (int(fixed[0]["start"]),))
+        con.commit()
+        after = analysis.detect_fps_drops(con, {"lag_fps_below": 60}, sess)
+        ok(len(after) == len(fixed) - 1, "ignorierter Einbruch zählt nicht mehr")
+        con.execute("DELETE FROM ignored_drops")
+        con.commit()
+        con.close()
+        ok(len(auto) >= 1, f"automatische Grenze: {len(auto)} Einbrüche erkannt")
+        # PresentMon liefert gepuffert (alle 3 s ein Schub): trotzdem keine leeren Sekunden
+        c, secs, tr = FrameClock(), {}, 1000.0
+        for i in range(150 * 30):
+            tr += 1 / 150
+            now = 1000.0 + (int((tr - 1000) / 3) + 1) * 3 + 0.2
+            secs[int(c.stamp("sc", 1000 / 150, tr - 1000, now))] = 1
+        ok(all(s in secs for s in range(min(secs), max(secs))), "FPS ohne Lücken trotz gepufferter Ausgabe")
+
     # ---- 4. Lag-Zeitfenster aus FPS (Einbruch beginnt vor dem Tastendruck und endet später)
     if not exe:
         sys.path.insert(0, ROOT)

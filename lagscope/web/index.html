@@ -17,6 +17,7 @@
     <button data-tab="events">Ereignisse</button>
     <button data-tab="setup">Einrichtung</button>
   </nav>
+  <a id="updateNote" class="small" style="display:none" target="_blank" rel="noopener"></a>
   <div class="status" id="status"><span class="dot"></span><span class="txt">…</span></div>
 </header>
 
@@ -42,7 +43,8 @@
       <select id="sessionSel"><option value="">Spielsitzung wählen …</option></select>
       <span class="range" id="rangeTxt"></span>
     </div>
-    <div class="hint small">Bereich im Diagramm mit der Maus ziehen = hineinzoomen · Klick = Prozesse zu diesem Zeitpunkt</div>
+    <div class="hint small">Bereich im Diagramm mit der Maus ziehen = hineinzoomen · Klick = Prozesse zu diesem Zeitpunkt · <span style="color:var(--auto)">orange</span> = automatisch erkannter FPS-Einbruch</div>
+    <div class="toolbar small thrBar"></div>
     <div class="markers" id="markerChips"></div>
     <div class="groups" id="groupToggles"></div>
     <div class="layout">
@@ -57,7 +59,8 @@
   <section id="tab-analysis" class="tab">
     <div class="toolbar">
       <button id="runAnalysis" class="primary">Neu analysieren</button>
-      <label class="chk"><input type="checkbox" id="useAuto" checked> FPS-Einbrüche aus MangoHud automatisch einbeziehen</label>
+      <label class="chk"><input type="checkbox" id="useAuto" checked> FPS-Einbrüche automatisch einbeziehen</label>
+      <span class="small thrBar"></span>
       <span class="small muted" id="analysisMeta"></span>
     </div>
     <div id="analysisOut"><div class="empty">Analyse wird geladen …</div></div>
