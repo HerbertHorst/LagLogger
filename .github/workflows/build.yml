@@ -103,3 +103,5 @@ jobs:
             --target "$GITHUB_SHA" --latest \
             --title "Lagscope $VERSION" \
             --notes "Automatisch gebaut aus $GITHUB_SHA. Windows: lagscope-windows.zip (mit PresentMon). Linux: lagscope-linux.zip. Anleitung: siehe README."
+          # sicherstellen, dass das Release veröffentlicht ist (nicht als Entwurf hängen bleibt)
+          gh release edit latest --draft=false --latest
