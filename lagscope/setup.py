@@ -21,6 +21,7 @@ LAUNCHERS = {
                                    ("mark", "--good"), "emblem-ok"),
     "lagscope-mark-end.desktop": ("Lagscope: Lag vorbei markieren", "Markiert: der Lag ist vorbei",
                                   ("mark", "--end"), "emblem-default"),
+    "lagscope-stop.desktop": ("Lagscope beenden", "Beendet den Lagscope-Logger", ("stop",), "application-exit"),
 }
 
 

@@ -111,18 +111,27 @@ class Daemon:
         log("Gestartet. " + db.get_meta(con, "capabilities", ""))
 
     def start_tray(self):
-        """Windows: Symbol im Infobereich der Taskleiste."""
-        if not (osutil.IS_WIN and self.cfg.get("tray", True)):
+        """Symbol im Infobereich der Taskleiste (Windows: Win32, Linux: StatusNotifierItem über D-Bus)."""
+        if not self.cfg.get("tray", True):
             return
+        from . import server
+        actions = dict(on_open=lambda: osutil.open_url(server.current_url()), on_mark=self.ui_marks.put,
+                       on_quit=STOP.set)
         try:
-            from . import server, tray_win
-            icon = os.path.join(config.DATA_DIR, "icon.ico")
-            with open(icon, "wb") as f:
-                f.write(server.static("icon.ico"))
-            self.tray = tray_win.Tray(icon, on_open=lambda: osutil.open_url(server.current_url()),
-                                      on_mark=self.ui_marks.put, on_quit=STOP.set)
+            if osutil.IS_WIN:
+                from . import tray_win
+                icon = os.path.join(config.DATA_DIR, "icon.ico")
+                with open(icon, "wb") as f:
+                    f.write(server.static("icon.ico"))
+                self.tray = tray_win.Tray(icon, **actions)
+            else:
+                from . import tray_linux
+                self.tray = tray_linux.Tray(server.static("icon.png"), **actions)
+            log("Tray-Symbol aktiv")
+        except ImportError:
+            log("Tray-Symbol nicht möglich: PyGObject (python3-gobject / python3-gi) fehlt")
         except Exception as e:
-            log(f"Tray-Symbol nicht möglich: {e!r}")
+            log(f"Tray-Symbol nicht möglich: {e}")
 
     def update_tray(self):
         if not self.tray:

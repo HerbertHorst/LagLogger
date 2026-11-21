@@ -29,6 +29,11 @@ jobs:
         run: |
           python build.py
           python tools/smoke_test.py --exe dist/lagscope
+      - name: Tray-Symbol (D-Bus, System-Python mit PyGObject)
+        if: matrix.python == '3.12'
+        run: |
+          sudo apt-get install -y python3-gi dbus >/dev/null
+          dbus-run-session -- /usr/bin/python3 tools/linux_tray_test.py
 
   windows:
     name: Windows · EXE

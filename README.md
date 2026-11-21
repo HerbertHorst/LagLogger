@@ -38,7 +38,7 @@ Die Downloads werden bei jeder Änderung automatisch gebaut und auf echtem Windo
 |  | Windows | Linux |
 |---|---|---|
 | Starten | Doppelklick auf `lagscope.exe` | Doppelklick auf `Lagscope.desktop` (oder `python3 lagscope`) |
-| Sieht man, dass es läuft? | **Symbol im Infobereich der Taskleiste** (rechts unten, ggf. im ^-Menü). Rechtsklick: Auswertung öffnen · Lag markieren · Beenden | Kein Symbol – Status steht oben rechts in der Auswertung; Menüeintrag „Lagscope“ öffnet sie |
+| Sieht man, dass es läuft? | **Symbol im Infobereich der Taskleiste** (rechts unten, ggf. im ^-Menü). Rechtsklick: Auswertung öffnen · Lag markieren · Beenden | **Symbol im Infobereich** (KDE Plasma, z. B. Bazzite; GNOME mit AppIndicator-Erweiterung). Rechtsklick: Auswertung öffnen · Lag markieren · Beenden |
 | Autostart | Einrichtung → „Autostart aktivieren“ | Einrichtung → „Autostart aktivieren“ |
 | Lag markieren | **`Strg+Alt+L`** – eingebaut, funktioniert auch im Spiel (Vollbild), piept zur Bestätigung. Test: Einrichtung → „jetzt Strg+Alt+G drücken“ | eigenes Tastenkürzel in KDE/GNOME (siehe unten), Bestätigung als Benachrichtigung |
 | „Läuft gut“ / „Lag vorbei“ (optional, mit FPS-Daten unnötig) | `Strg+Alt+G` / `Strg+Alt+K` | eigene Tastenkürzel (optional) |
@@ -47,6 +47,9 @@ Die Downloads werden bei jeder Änderung automatisch gebaut und auf echtem Windo
 | Auswertung | Tray-Symbol → „Auswertung öffnen“ oder Doppelklick auf die EXE | Doppelklick oder Menüeintrag „Lagscope“ |
 
 Die Auswertung läuft im normalen Browser. Der Logger läuft weiter, auch wenn der Browser zu ist.
+
+**Beenden:** Tray-Symbol → *Lagscope beenden*, oder in der Auswertung oben rechts **„⏻ Beenden“**, oder unter Linux
+der Menüeintrag *Lagscope beenden* (nach „Menüeinträge anlegen“). Die gesammelten Daten bleiben erhalten.
 
 ## Einrichtung unter Windows
 
@@ -384,7 +387,7 @@ Der Spielname lässt sich auch direkt in der Oberfläche (Einrichtung → Logger
 | `hotkeys` | `ctrl+alt+l` / `g` / `k` | Windows: Tastenkürzel für Lag / läuft gut / Lag vorbei (z. B. `"ctrl+alt+f9"`) |
 | `presentmon_path` | `""` | Windows: Pfad zu PresentMon (leer = neben `lagscope.exe`) |
 | `lhm_url` | `http://127.0.0.1:8085/data.json` | Windows: LibreHardwareMonitor-Webserver |
-| `tray` | `true` | Windows: Symbol im Infobereich anzeigen |
+| `tray` | `true` | Symbol im Infobereich anzeigen (Linux: braucht PyGObject, auf Bazzite/Fedora/Ubuntu vorinstalliert) |
 
 ## Entfernen
 

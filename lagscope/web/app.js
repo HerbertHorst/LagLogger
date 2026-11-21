@@ -801,11 +801,7 @@ function bindSetup() {
     $("#gameSave").textContent = r.ok ? "Gespeichert ✓" : "Fehler";
     setTimeout(() => { $("#gameSave").textContent = "Speichern"; }, 1500);
   };
-  $("#stopLogger").onclick = async () => {
-    if (!confirm("Logger wirklich beenden? Bis zum nächsten Start (Doppelklick oder Autostart) wird nichts aufgezeichnet.")) return;
-    await post("/api/stop", {});
-    setTimeout(refreshStatus, 1000);
-  };
+  $("#stopLogger").onclick = quitLagscope;
 }
 
 // ------------------------------------------------------------------ Hinweis auf neue Version
@@ -853,7 +849,17 @@ function switchTab(name) {
   }
 }
 
+async function quitLagscope() {
+  if (!confirm("Lagscope beenden? Bis zum nächsten Start (Doppelklick oder Autostart) wird nichts mehr aufgezeichnet.")) return;
+  try { await post("/api/stop", {}); } catch (e) { /* Verbindung bricht beim Beenden ab */ }
+  document.body.innerHTML = `<div style="max-width:560px;margin:15vh auto;padding:24px;text-align:center" class="card">
+    <h2>Lagscope wurde beendet</h2>
+    <p>Es wird nichts mehr aufgezeichnet. Die gesammelten Daten bleiben erhalten.</p>
+    <p class="small muted">Wieder starten: Lagscope per Doppelklick öffnen (Windows: <code>lagscope.exe</code>, Linux: <code>Lagscope.desktop</code> bzw. Menüeintrag „Lagscope“) – oder beim nächsten Systemstart per Autostart.</p></div>`;
+}
+
 async function init() {
+  $("#quitBtn").onclick = quitLagscope;
   $$("#tabs button").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
   $("#runAnalysis").onclick = () => loadAnalysis(true);
   $("#useAuto").onchange = () => loadAnalysis(false);
